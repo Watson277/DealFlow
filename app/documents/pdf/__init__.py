@@ -1,7 +1,12 @@
 """PDF parsing intermediate representation."""
 
 from app.documents.pdf.config import PDFParsingConfig
-from app.documents.pdf.errors import PDFPreflightCode, PDFPreflightError
+from app.documents.pdf.errors import (
+    PDFOCRError,
+    PDFOCRErrorCode,
+    PDFPreflightCode,
+    PDFPreflightError,
+)
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -16,6 +21,7 @@ from app.documents.pdf.models import (
     PDFWarningSeverity,
 )
 from app.documents.pdf.native import NativePDFDocument, NativePDFParser
+from app.documents.pdf.ocr import OCRBlock, OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult
 from app.documents.pdf.quality import PageQuality, PageQualityDetector
 
@@ -25,10 +31,15 @@ __all__ = [
     "DocumentIR",
     "NativePDFDocument",
     "NativePDFParser",
+    "OCRBlock",
+    "OCRPageResult",
+    "OCRProvider",
     "PDFBlockSource",
     "PDFBlockType",
     "PDFDocumentType",
     "PDFPageType",
+    "PDFOCRError",
+    "PDFOCRErrorCode",
     "PDFParseStatus",
     "PDFParsingConfig",
     "PDFPreflightCode",
@@ -39,4 +50,5 @@ __all__ = [
     "PageQuality",
     "PageQualityDetector",
     "ParseWarning",
+    "TesseractOCRProvider",
 ]

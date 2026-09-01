@@ -10,7 +10,7 @@ import pymupdf
 from pydantic import JsonValue
 
 from app.documents.pdf.config import PDFParsingConfig
-from app.documents.pdf.errors import PDFPreflightCode, PDFPreflightError
+from app.documents.pdf.errors import PDFOCRError, PDFPreflightCode, PDFPreflightError
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -22,6 +22,7 @@ from app.documents.pdf.models import (
     PDFPageType,
     PDFWarningSeverity,
 )
+from app.documents.pdf.ocr import OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidator
 from app.documents.pdf.quality import BBoxTuple, PageQuality, PageQualityDetector
 
@@ -43,14 +44,23 @@ class _BlockCandidate:
     type: PDFBlockType
     text: str | None
     raw_text: str | None
+    source: PDFBlockSource
+    confidence: float | None
     metadata: dict[str, JsonValue]
 
 
 class NativePDFParser:
-    def __init__(self, config: PDFParsingConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: PDFParsingConfig | None = None,
+        ocr_provider: OCRProvider | None = None,
+    ) -> None:
         self.config = config or PDFParsingConfig()
         self.preflight = PDFPreflightValidator(self.config)
         self.quality = PageQualityDetector(self.config)
+        self.ocr_provider = (
+            ocr_provider if ocr_provider is not None else TesseractOCRProvider(self.config)
+        )
 
     def parse(self, content: bytes, filename: str) -> NativePDFDocument:
         try:
@@ -88,9 +98,78 @@ class NativePDFParser:
         flags = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_IMAGES
         layout: dict[str, Any] = page.get_text("dict", sort=True, flags=flags)  # type: ignore[no-untyped-call]
 
-        candidates = self._text_candidates(layout.get("blocks", []), width, height)
+        native_text_candidates = self._text_candidates(layout.get("blocks", []), width, height)
         image_candidates = self._image_candidates(page, width, height)
-        candidates.extend(image_candidates)
+        quality = self.quality.assess(
+            text="\n".join(candidate.text or "" for candidate in native_text_candidates),
+            page_width=width,
+            page_height=height,
+            text_bboxes=[_bbox_tuple(candidate.bbox) for candidate in native_text_candidates],
+            image_bboxes=[_bbox_tuple(candidate.bbox) for candidate in image_candidates],
+        )
+
+        candidates = [*native_text_candidates, *image_candidates]
+        warnings = list(
+            _quality_warnings(
+                page_number,
+                quality,
+                include_ocr_required=not self.config.ocr_enabled,
+            )
+        )
+        ocr_metadata: dict[str, JsonValue] = {
+            "requested": quality.requires_ocr,
+            "enabled": self.config.ocr_enabled,
+            "applied": False,
+        }
+        if quality.requires_ocr and self.config.ocr_enabled:
+            try:
+                ocr_result = self.ocr_provider.recognize_page(page, page_number)
+            except PDFOCRError as exc:
+                warnings.append(
+                    ParseWarning(
+                        code="OCR_FAILED",
+                        message="OCR fallback could not process this page",
+                        page_number=page_number,
+                        details={
+                            "error_code": exc.code.value,
+                            "provider": self.ocr_provider.name,
+                        },
+                    )
+                )
+                ocr_metadata.update(
+                    {
+                        "provider": self.ocr_provider.name,
+                        "error_code": exc.code.value,
+                    }
+                )
+            else:
+                ocr_metadata.update(_ocr_metadata(ocr_result))
+                if ocr_result.blocks:
+                    candidates = [*_ocr_candidates(ocr_result), *image_candidates]
+                    ocr_metadata["applied"] = True
+                    ocr_metadata["native_text_blocks_replaced"] = len(native_text_candidates)
+                    warnings.append(
+                        ParseWarning(
+                            code="OCR_APPLIED",
+                            message="OCR fallback supplied positioned text for this page",
+                            severity=PDFWarningSeverity.INFO,
+                            page_number=page_number,
+                            details={
+                                "provider": ocr_result.provider,
+                                "block_count": len(ocr_result.blocks),
+                            },
+                        )
+                    )
+                else:
+                    warnings.append(
+                        ParseWarning(
+                            code="OCR_EMPTY_RESULT",
+                            message="OCR completed but found no text on this page",
+                            page_number=page_number,
+                            details={"provider": ocr_result.provider},
+                        )
+                    )
+
         candidates.sort(key=lambda candidate: (candidate.bbox.y0, candidate.bbox.x0))
 
         blocks = tuple(
@@ -98,21 +177,14 @@ class NativePDFParser:
                 block_id=f"p{page_number}_b{index:04d}",
                 type=candidate.type,
                 bbox=candidate.bbox,
-                source=PDFBlockSource.NATIVE,
+                source=candidate.source,
                 reading_order=index - 1,
                 text=candidate.text,
                 raw_text=candidate.raw_text,
+                confidence=candidate.confidence,
                 metadata=candidate.metadata,
             )
             for index, candidate in enumerate(candidates, start=1)
-        )
-        text_candidates = [candidate for candidate in candidates if candidate.text]
-        quality = self.quality.assess(
-            text="\n".join(candidate.text or "" for candidate in text_candidates),
-            page_width=width,
-            page_height=height,
-            text_bboxes=[_bbox_tuple(candidate.bbox) for candidate in text_candidates],
-            image_bboxes=[_bbox_tuple(candidate.bbox) for candidate in image_candidates],
         )
         return PageIR(
             page_number=page_number,
@@ -121,8 +193,8 @@ class NativePDFParser:
             page_type=quality.page_type,
             confidence=quality.confidence,
             blocks=blocks,
-            warnings=_quality_warnings(page_number, quality),
-            metadata={"quality": quality.as_metadata()},
+            warnings=tuple(warnings),
+            metadata={"quality": quality.as_metadata(), "ocr": ocr_metadata},
         )
 
     @staticmethod
@@ -164,6 +236,8 @@ class NativePDFParser:
                     type=PDFBlockType.TEXT,
                     text=text,
                     raw_text=text,
+                    source=PDFBlockSource.NATIVE,
+                    confidence=None,
                     metadata={
                         "native_block_number": int(raw_block.get("number", len(candidates))),
                         "span_count": span_count,
@@ -199,6 +273,8 @@ class NativePDFParser:
                     type=PDFBlockType.IMAGE,
                     text=None,
                     raw_text=None,
+                    source=PDFBlockSource.NATIVE,
+                    confidence=None,
                     metadata=metadata,
                 )
             )
@@ -230,7 +306,12 @@ def _bbox_tuple(bbox: BoundingBox) -> BBoxTuple:
     return (bbox.x0, bbox.y0, bbox.x1, bbox.y1)
 
 
-def _quality_warnings(page_number: int, quality: PageQuality) -> tuple[ParseWarning, ...]:
+def _quality_warnings(
+    page_number: int,
+    quality: PageQuality,
+    *,
+    include_ocr_required: bool,
+) -> tuple[ParseWarning, ...]:
     warnings: list[ParseWarning] = []
     if quality.page_type is PDFPageType.EMPTY:
         warnings.append(
@@ -241,7 +322,7 @@ def _quality_warnings(page_number: int, quality: PageQuality) -> tuple[ParseWarn
                 page_number=page_number,
             )
         )
-    elif quality.requires_ocr:
+    elif quality.requires_ocr and include_ocr_required:
         warnings.append(
             ParseWarning(
                 code="OCR_REQUIRED",
@@ -260,6 +341,32 @@ def _quality_warnings(page_number: int, quality: PageQuality) -> tuple[ParseWarn
             )
         )
     return tuple(warnings)
+
+
+def _ocr_candidates(result: OCRPageResult) -> list[_BlockCandidate]:
+    return [
+        _BlockCandidate(
+            bbox=block.bbox,
+            type=PDFBlockType.TEXT,
+            text=block.text,
+            raw_text=block.text,
+            source=PDFBlockSource.OCR,
+            confidence=block.confidence,
+            metadata=block.metadata,
+        )
+        for block in result.blocks
+    ]
+
+
+def _ocr_metadata(result: OCRPageResult) -> dict[str, JsonValue]:
+    return {
+        "provider": result.provider,
+        "languages": result.languages,
+        "dpi": result.dpi,
+        "rendered_width": result.rendered_width,
+        "rendered_height": result.rendered_height,
+        "block_count": len(result.blocks),
+    }
 
 
 def _plain_text(pages: tuple[PageIR, ...]) -> str:

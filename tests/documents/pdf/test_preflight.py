@@ -83,6 +83,12 @@ def test_pdf_config_loads_from_application_settings() -> None:
         pdf_text_max_garbled_ratio=0.2,
         pdf_scanned_image_coverage_threshold=0.7,
         pdf_mixed_image_coverage_threshold=0.4,
+        pdf_ocr_enabled=False,
+        pdf_ocr_dpi=300,
+        pdf_ocr_languages="eng",
+        pdf_ocr_timeout_seconds=45,
+        pdf_ocr_executable="custom-tesseract",
+        pdf_ocr_page_segmentation_mode=6,
     )
 
     config = PDFParsingConfig.from_settings(settings)
@@ -94,6 +100,12 @@ def test_pdf_config_loads_from_application_settings() -> None:
         max_garbled_ratio=0.2,
         scanned_image_coverage_threshold=0.7,
         mixed_image_coverage_threshold=0.4,
+        ocr_enabled=False,
+        ocr_dpi=300,
+        ocr_languages="eng",
+        ocr_timeout_seconds=45,
+        ocr_executable="custom-tesseract",
+        ocr_page_segmentation_mode=6,
     )
 
 

@@ -6,7 +6,7 @@ from docx import Document as DocxDocument
 
 from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError, UnsupportedDocumentError
-from app.documents.pdf import NativePDFDocument, NativePDFParser, PDFParsingConfig
+from app.documents.pdf import NativePDFDocument, NativePDFParser, OCRProvider, PDFParsingConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,8 +17,12 @@ class ParsedDocument:
 
 
 class DocumentParser:
-    def __init__(self, pdf_config: PDFParsingConfig | None = None) -> None:
-        self.pdf_parser = NativePDFParser(pdf_config)
+    def __init__(
+        self,
+        pdf_config: PDFParsingConfig | None = None,
+        pdf_ocr_provider: OCRProvider | None = None,
+    ) -> None:
+        self.pdf_parser = NativePDFParser(pdf_config, pdf_ocr_provider)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "DocumentParser":

@@ -58,16 +58,18 @@ Swagger `/docs` 和 ReDoc `/redoc` 已关闭，业务界面不展示自动生成
 
 页面每 5 秒刷新（浏览器标签页隐藏时暂停）。审核和重试后的状态也会同步到当前详情页。
 
-## PDF 原生解析
+## PDF 原生解析与 OCR fallback
 
 PDF 进入后续工作流前会先完成文件预检，拒绝损坏、加密、无页面或超过
 `PDF_MAX_PAGES` 的文件。解析器使用 PyMuPDF 提取原生文本块、图片位置、字体信息和 bbox，
 并按页计算有效字符数、乱码率以及文本/图片覆盖率，得到 `text`、`scanned`、`mixed` 或
 `empty` 页面类型。结构化结果通过 `ParsedDocument.pdf` 提供，原有带页码标记的纯文本输出保持兼容。
 
-当前阶段只识别需要 OCR 的页面并写入 `OCR_REQUIRED` 警告，尚未执行 OCR。因此纯扫描 PDF
-仍会因没有可提取文本而失败；加入 OCR fallback 后将直接复用已经生成的页面类型和 bbox。
-相关阈值均可通过 `.env` 中的 `PDF_*` 配置调整。
+对质量检测判定为 `scanned` 或原生文本不足的 `mixed` 页面，解析器会以配置的 DPI 渲染页面，
+调用 Tesseract 识别中英文字，并将 TSV 中的文字、置信度与像素坐标映射回 PDF bbox。成功的
+OCR 行以 `source=ocr` 写入 `BlockIR`；失败时保留原生结果并写入稳定的 `OCR_FAILED` 告警，
+不会把命令输出或本地路径写入业务文本。OCR Provider 可替换，相关开关、语言、DPI、超时及
+页面分割模式均可通过 `.env` 中的 `PDF_OCR_*` 配置调整。
 
 ## 删除客户、知识库与任务
 

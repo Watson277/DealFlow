@@ -16,3 +16,16 @@ class PDFPreflightError(DocumentProcessingError):
     def __init__(self, code: PDFPreflightCode, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class PDFOCRErrorCode(StrEnum):
+    UNAVAILABLE = "PDF_OCR_UNAVAILABLE"
+    TIMEOUT = "PDF_OCR_TIMEOUT"
+    FAILED = "PDF_OCR_FAILED"
+    INVALID_OUTPUT = "PDF_OCR_INVALID_OUTPUT"
+
+
+class PDFOCRError(DocumentProcessingError):
+    def __init__(self, code: PDFOCRErrorCode, message: str) -> None:
+        super().__init__(message)
+        self.code = code

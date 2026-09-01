@@ -11,6 +11,7 @@ from app.documents.pdf import (
     PDFBlockType,
     PDFDocumentType,
     PDFPageType,
+    PDFParsingConfig,
 )
 
 ONE_PIXEL_PNG = base64.b64decode(
@@ -31,7 +32,7 @@ def test_native_parser_extracts_text_image_layout_and_bboxes() -> None:
 
     assert parsed.document_type is PDFDocumentType.TEXT_BASED
     assert parsed.page_count == 1
-    assert parsed.parser_version == "native-1.0"
+    assert parsed.parser_version == "native-ocr-1.0"
     assert "--- Page 1 ---" in parsed.text
     assert "DealFlow native requirement" in parsed.text
 
@@ -71,7 +72,7 @@ def test_native_parser_classifies_scanned_and_mixed_documents() -> None:
     content = document.tobytes()
     document.close()
 
-    parsed = NativePDFParser().parse(content, "mixed.pdf")
+    parsed = NativePDFParser(PDFParsingConfig(ocr_enabled=False)).parse(content, "mixed.pdf")
 
     assert parsed.document_type is PDFDocumentType.MIXED
     assert [page.page_type for page in parsed.pages] == [PDFPageType.SCANNED, PDFPageType.TEXT]
@@ -103,9 +104,10 @@ def test_document_parser_still_rejects_pdf_with_no_native_text() -> None:
     content = document.tobytes()
     document.close()
 
-    native = NativePDFParser().parse(content, "scan.pdf")
+    config = PDFParsingConfig(ocr_enabled=False)
+    native = NativePDFParser(config).parse(content, "scan.pdf")
     assert native.document_type is PDFDocumentType.SCANNED
     assert native.pages[0].warnings[0].code == "OCR_REQUIRED"
 
     with pytest.raises(DocumentProcessingError, match="no extractable text"):
-        DocumentParser().parse(content, "scan.pdf")
+        DocumentParser(config).parse(content, "scan.pdf")
