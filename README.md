@@ -78,6 +78,26 @@ Chat Completions 的 VLM。VLM 默认关闭，只有显式设置 `PDF_VLM_ENABLE
 `caption`。全部页面处理完成后，才汇总 `page_types[]` 得到 `DocumentIR.document_type`；每页实际
 路由和融合统计也会写入 IR metadata，便于排障和追溯。
 
+### 本地 PDF 解析测试接口
+
+开发环境提供 `POST /dev/pdf/parse`。它不会访问任意服务器路径，而是接收本地上传的 PDF，
+运行与 RFP、企业知识库相同的统一解析器，并下载一个 ZIP，内含：
+
+- `*.document-ir.json`：完整 DocumentIR；
+- `*.parsed.md`：按页组织的可读解析文本和表格 Markdown；
+- `*.summary.json`：页面类型、实际路由、Block 数量和告警数量摘要。
+
+PowerShell 测试命令：
+
+```powershell
+curl.exe -X POST "http://localhost:8000/dev/pdf/parse" `
+  -F "file=@E:\edge下载\RAG_PDF文档处理技术方案.pdf;type=application/pdf" `
+  -o "pdf-parse-result.zip"
+```
+
+接口仅在 `APP_ENV=development/dev/local/test/testing` 时开放，其他环境返回 `404`。上传大小受
+`MAX_RFP_UPLOAD_SIZE_BYTES` 限制。VLM 是否调用仍由 `PDF_VLM_ENABLED` 控制。
+
 ## 删除客户、知识库与任务
 
 客户卡片、知识库卡片、RFP 列表及任务详情提供删除按钮，必须二次确认。
