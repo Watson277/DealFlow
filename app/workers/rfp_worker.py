@@ -39,7 +39,7 @@ class RFPWorker:
         self.processor = RFPProcessingService(
             settings=self.settings,
             storage=ObjectStorageService(self.settings),
-            parser=DocumentParser(),
+            parser=DocumentParser.from_settings(self.settings),
             locks=self.locks,
             outbox_publisher=OutboxPublisher(self.kafka),
         )

@@ -19,6 +19,8 @@ def test_parse_pdf_extracts_text_and_page_count() -> None:
 
     assert "DealFlow PDF requirement" in parsed.text
     assert parsed.page_count == 1
+    assert parsed.pdf is not None
+    assert parsed.pdf.pages[0].blocks[0].bbox.x0 == pytest.approx(72)
 
 
 def test_parse_docx_extracts_paragraphs_and_tables() -> None:

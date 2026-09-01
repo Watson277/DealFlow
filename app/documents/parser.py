@@ -2,29 +2,38 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
-import pymupdf
 from docx import Document as DocxDocument
 
+from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError, UnsupportedDocumentError
+from app.documents.pdf import NativePDFDocument, NativePDFParser, PDFParsingConfig
 
 
 @dataclass(frozen=True, slots=True)
 class ParsedDocument:
     text: str
     page_count: int | None
+    pdf: NativePDFDocument | None = None
 
 
 class DocumentParser:
+    def __init__(self, pdf_config: PDFParsingConfig | None = None) -> None:
+        self.pdf_parser = NativePDFParser(pdf_config)
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "DocumentParser":
+        return cls(PDFParsingConfig.from_settings(settings))
+
     def parse(self, content: bytes, filename: str) -> ParsedDocument:
         extension = Path(filename).suffix.lower()
         try:
             if extension == ".pdf":
-                parsed = self._parse_pdf(content)
+                parsed = self._parse_pdf(content, filename)
             elif extension == ".docx":
                 parsed = self._parse_docx(content)
             else:
                 raise UnsupportedDocumentError("only PDF and DOCX files are supported")
-        except UnsupportedDocumentError:
+        except (UnsupportedDocumentError, DocumentProcessingError):
             raise
         except Exception as exc:
             raise DocumentProcessingError(
@@ -35,16 +44,9 @@ class DocumentParser:
             raise DocumentProcessingError("document contains no extractable text")
         return parsed
 
-    @staticmethod
-    def _parse_pdf(content: bytes) -> ParsedDocument:
-        with pymupdf.open(  # type: ignore[no-untyped-call]
-            stream=content, filetype="pdf"
-        ) as document:
-            pages = [page.get_text("text").strip() for page in document]
-            text = "\n\n".join(
-                f"--- Page {index} ---\n{page}" for index, page in enumerate(pages, start=1) if page
-            )
-            return ParsedDocument(text=text, page_count=document.page_count)
+    def _parse_pdf(self, content: bytes, filename: str) -> ParsedDocument:
+        parsed = self.pdf_parser.parse(content, filename)
+        return ParsedDocument(text=parsed.text, page_count=parsed.page_count, pdf=parsed)
 
     @staticmethod
     def _parse_docx(content: bytes) -> ParsedDocument:

@@ -80,7 +80,7 @@ def get_knowledge_service(
     return KnowledgeService(
         session=session,
         storage=storage,
-        parser=DocumentParser(),
+        parser=DocumentParser.from_settings(settings),
         chunker=KnowledgeChunker(settings),
         embeddings=OpenAIEmbeddingService(settings),
         vector_store=QdrantKnowledgeStore(settings),
