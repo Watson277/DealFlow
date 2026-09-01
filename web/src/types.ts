@@ -44,6 +44,8 @@ export interface KnowledgeDocument {
   size_bytes: number;
   document_version: string | null;
   knowledge_category: string | null;
+  parsed_text_object_key: string | null;
+  parsed_ir_object_key: string | null;
   extra_data: Record<string, unknown>;
   created_at: string;
 }

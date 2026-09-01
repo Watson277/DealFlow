@@ -45,6 +45,7 @@ class DocumentSummary(BaseModel):
     size_bytes: int
     page_count: int | None
     parsed_text_object_key: str | None
+    parsed_ir_object_key: str | None
     created_at: datetime
 
 

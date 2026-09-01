@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any, cast
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pymupdf
 from pydantic import JsonValue
@@ -16,12 +18,14 @@ from app.documents.pdf.layout.tables import NativeTableExtraction, extract_nativ
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
+    DocumentIR,
     PageIR,
     ParseWarning,
     PDFBlockSource,
     PDFBlockType,
     PDFDocumentType,
     PDFPageType,
+    PDFParseStatus,
     PDFWarningSeverity,
 )
 from app.documents.pdf.ocr import OCRPageResult, OCRProvider, TesseractOCRProvider
@@ -38,6 +42,7 @@ class NativePDFDocument:
     warnings: tuple[ParseWarning, ...]
     preflight: PDFPreflightResult
     parser_version: str
+    ir: DocumentIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +71,12 @@ class NativePDFParser:
             ocr_provider if ocr_provider is not None else TesseractOCRProvider(self.config)
         )
 
-    def parse(self, content: bytes, filename: str) -> NativePDFDocument:
+    def parse(
+        self,
+        content: bytes,
+        filename: str,
+        document_id: UUID | str | None = None,
+    ) -> NativePDFDocument:
         try:
             document = pymupdf.open(stream=content, filetype="pdf")  # type: ignore[no-untyped-call]
         except Exception as exc:
@@ -87,14 +97,45 @@ class NativePDFParser:
             pages = self.layout.analyze(extracted_pages)
 
         warnings = tuple(warning for page in pages for warning in page.warnings)
-        return NativePDFDocument(
-            text=_plain_text(pages),
+        text = _plain_text(pages)
+        checksum = sha256(content).hexdigest()
+        resolved_document_id = (
+            UUID(str(document_id))
+            if document_id is not None
+            else uuid5(NAMESPACE_URL, f"sha256:{checksum}")
+        )
+        document_type = _document_type(pages)
+        status = (
+            PDFParseStatus.PARTIAL_SUCCESS
+            if any(warning.severity is not PDFWarningSeverity.INFO for warning in warnings)
+            else PDFParseStatus.SUCCEEDED
+        )
+        ir = DocumentIR(
+            parser_version=self.config.parser_version,
+            document_id=resolved_document_id,
+            source_filename=filename,
+            checksum_sha256=checksum,
+            document_type=document_type,
+            status=status,
             page_count=result.page_count,
-            document_type=_document_type(pages),
+            pages=pages,
+            warnings=warnings,
+            metadata={
+                "file_size_bytes": len(content),
+                "plain_text_sha256": sha256(text.encode("utf-8")).hexdigest(),
+                "plain_text_size_bytes": len(text.encode("utf-8")),
+                "source_pdf_metadata": result.metadata,
+            },
+        )
+        return NativePDFDocument(
+            text=text,
+            page_count=result.page_count,
+            document_type=document_type,
             pages=pages,
             warnings=warnings,
             preflight=result,
             parser_version=self.config.parser_version,
+            ir=ir,
         )
 
     def _extract_page(self, page: pymupdf.Page, page_number: int) -> PageIR:

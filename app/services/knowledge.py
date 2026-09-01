@@ -7,6 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DeletionConflictError, KnowledgeIndexError, KnowledgeNotFoundError
 from app.documents.parser import DocumentParser
+from app.documents.pdf import (
+    DOCUMENT_IR_CONTENT_TYPE,
+    document_ir_object_key,
+    serialize_document_ir,
+)
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import Document
 from app.models.enums import DocumentStatus, DocumentType
@@ -73,6 +78,7 @@ class KnowledgeService:
             extra_data={"title": title.strip(), "knowledge_status": "ACTIVE"},
         )
         parsed_object_key: str | None = None
+        parsed_ir_object_key: str | None = None
         try:
             async with self.session.begin():
                 DocumentRepository(self.session).add(document)
@@ -87,9 +93,17 @@ class KnowledgeService:
                 self.parser.parse,
                 content,
                 stored.original_filename,
+                document_id,
             )
             parsed_object_key = f"knowledge/{document_id}/parsed.txt"
             await self.storage.upload_text(parsed_object_key, parsed.text)
+            if parsed.document_ir is not None:
+                parsed_ir_object_key = document_ir_object_key(document_id)
+                await self.storage.upload_text(
+                    parsed_ir_object_key,
+                    serialize_document_ir(parsed.document_ir),
+                    content_type=DOCUMENT_IR_CONTENT_TYPE,
+                )
             chunks = self.chunker.split(parsed.text)
             vectors = await self.embeddings.embed([chunk.text for chunk in chunks])
             point_ids = await self.vector_store.index_document(
@@ -107,6 +121,7 @@ class KnowledgeService:
                 persisted.status = DocumentStatus.READY.value
                 persisted.page_count = parsed.page_count
                 persisted.parsed_text_object_key = parsed_object_key
+                persisted.parsed_ir_object_key = parsed_ir_object_key
                 persisted.extra_data = {
                     **persisted.extra_data,
                     "qdrant_collection": self.vector_store.settings.qdrant_collection,
@@ -114,7 +129,7 @@ class KnowledgeService:
                 }
                 document = persisted
         except Exception:
-            await self._mark_failed(document_id, parsed_object_key)
+            await self._mark_failed(document_id, parsed_object_key, parsed_ir_object_key)
             with suppress(Exception):
                 await self.vector_store.delete_document(document_id)
             raise
@@ -157,6 +172,7 @@ class KnowledgeService:
         self,
         document_id: str,
         parsed_object_key: str | None,
+        parsed_ir_object_key: str | None,
     ) -> None:
         try:
             async with self.session.begin():
@@ -164,5 +180,6 @@ class KnowledgeService:
                 if document is not None:
                     document.status = DocumentStatus.FAILED.value
                     document.parsed_text_object_key = parsed_object_key
+                    document.parsed_ir_object_key = parsed_ir_object_key
         except Exception:
             pass

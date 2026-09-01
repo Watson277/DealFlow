@@ -15,6 +15,7 @@ class KnowledgeDocumentResponse(BaseModel):
     document_version: str | None
     knowledge_category: str | None
     parsed_text_object_key: str | None
+    parsed_ir_object_key: str | None
     extra_data: dict[str, object]
     created_at: datetime
     updated_at: datetime

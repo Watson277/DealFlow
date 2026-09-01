@@ -25,11 +25,19 @@ from app.documents.pdf.native import NativePDFDocument, NativePDFParser
 from app.documents.pdf.ocr import OCRBlock, OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult
 from app.documents.pdf.quality import PageQuality, PageQualityDetector
+from app.documents.pdf.serialization import (
+    DOCUMENT_IR_CONTENT_TYPE,
+    DOCUMENT_IR_FILENAME,
+    document_ir_object_key,
+    serialize_document_ir,
+)
 
 __all__ = [
     "BlockIR",
     "BoundingBox",
     "DocumentIR",
+    "DOCUMENT_IR_CONTENT_TYPE",
+    "DOCUMENT_IR_FILENAME",
     "NativePDFDocument",
     "NativePDFParser",
     "OCRBlock",
@@ -53,4 +61,6 @@ __all__ = [
     "PageQualityDetector",
     "ParseWarning",
     "TesseractOCRProvider",
+    "document_ir_object_key",
+    "serialize_document_ir",
 ]

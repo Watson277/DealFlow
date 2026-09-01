@@ -8,6 +8,11 @@ from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError
 from app.db.session import async_session_factory
 from app.documents.parser import DocumentParser
+from app.documents.pdf import (
+    DOCUMENT_IR_CONTENT_TYPE,
+    document_ir_object_key,
+    serialize_document_ir,
+)
 from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.minio import ObjectStorageService
@@ -66,18 +71,28 @@ class RFPProcessingService:
             rfp, document, workflow_run = entities
 
             parsed_object_key = f"rfp/{event.rfp_id}/parsed/{event.document_id}.txt"
+            parsed_ir_object_key: str | None = None
             try:
                 content = await self.storage.download(document.bucket, document.object_key)
                 parsed = await asyncio.to_thread(
                     self.parser.parse,
                     content,
                     document.original_filename,
+                    document.id,
                 )
                 await self.storage.upload_text(parsed_object_key, parsed.text)
+                if parsed.document_ir is not None:
+                    parsed_ir_object_key = document_ir_object_key(document.id)
+                    await self.storage.upload_text(
+                        parsed_ir_object_key,
+                        serialize_document_ir(parsed.document_ir),
+                        content_type=DOCUMENT_IR_CONTENT_TYPE,
+                    )
                 completion_event = await self._mark_completed(
                     session,
                     event,
                     parsed_object_key=parsed_object_key,
+                    parsed_ir_object_key=parsed_ir_object_key,
                     page_count=parsed.page_count,
                     text_size=len(parsed.text.encode("utf-8")),
                 )
@@ -97,6 +112,7 @@ class RFPProcessingService:
                 document_id=document.id,
                 workflow_run_id=workflow_run.id,
                 parsed_text_object_key=parsed_object_key,
+                parsed_ir_object_key=parsed_ir_object_key,
             )
 
     async def _mark_processing(
@@ -140,6 +156,7 @@ class RFPProcessingService:
         event: RFPUploadedEvent,
         *,
         parsed_object_key: str,
+        parsed_ir_object_key: str | None,
         page_count: int | None,
         text_size: int,
     ) -> OutboxEvent:
@@ -154,6 +171,7 @@ class RFPProcessingService:
 
             document.status = DocumentStatus.READY.value
             document.parsed_text_object_key = parsed_object_key
+            document.parsed_ir_object_key = parsed_ir_object_key
             document.page_count = page_count
             rfp.status = RFPStatus.PROCESSING.value
             rfp.current_stage = "document_parsed"
@@ -164,6 +182,7 @@ class RFPProcessingService:
             workflow_run.completed_at = None
             workflow_run.output_summary = {
                 "parsed_text_object_key": parsed_object_key,
+                "parsed_ir_object_key": parsed_ir_object_key,
                 "page_count": page_count,
                 "text_size_bytes": text_size,
             }

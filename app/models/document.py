@@ -62,6 +62,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     document_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     knowledge_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     parsed_text_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    parsed_ir_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     extra_data: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
     rfp: Mapped[RFP | None] = relationship(back_populates="documents")
