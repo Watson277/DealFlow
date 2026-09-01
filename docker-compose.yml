@@ -1,0 +1,338 @@
+name: dealflow
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  APP_HOST: 0.0.0.0
+  APP_PORT: 8000
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: ${DATABASE_URL_DOCKER:-mysql+aiomysql://dealflow:dealflow_mysql_change_me@mysql:3306/dealflow}
+  REDIS_URL: ${REDIS_URL_DOCKER:-redis://:dealflow_redis_change_me@redis:6379/0}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_DOCKER:-kafka:29092}
+  QDRANT_URL: ${QDRANT_URL_DOCKER:-http://qdrant:6333}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT_DOCKER:-minio:9000}
+  MINIO_ACCESS_KEY: ${DEALFLOW_MINIO_ROOT_USER:-dealflow_admin}
+  MINIO_SECRET_KEY: ${DEALFLOW_MINIO_ROOT_PASSWORD:-dealflow_minio_change_me}
+  MINIO_BUCKET: ${DEALFLOW_MINIO_BUCKET:-dealflow}
+  MINIO_SECURE: "false"
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  ZAI_API_KEY: ${ZAI_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4/}
+  LLM_MODEL: ${LLM_MODEL:-glm-5.3-flash}
+
+x-app-service: &app-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: dealflow-app:local
+  env_file:
+    - path: .env
+      required: false
+  environment: *app-environment
+  networks:
+    - dealflow
+
+x-app-dependencies: &app-dependencies
+  mysql:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  kafka-init:
+    condition: service_completed_successfully
+  qdrant:
+    condition: service_healthy
+  minio-init:
+    condition: service_completed_successfully
+  migration:
+    condition: service_completed_successfully
+
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: dealflow-web:local
+    container_name: dealflow-web
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    networks:
+      - dealflow
+
+  mysql:
+    image: mysql:8.4
+    container_name: dealflow-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DEALFLOW_MYSQL_DATABASE:-dealflow}
+      MYSQL_USER: ${DEALFLOW_MYSQL_USER:-dealflow}
+      MYSQL_PASSWORD: ${DEALFLOW_MYSQL_PASSWORD:-dealflow_mysql_change_me}
+      MYSQL_ROOT_PASSWORD: ${DEALFLOW_MYSQL_ROOT_PASSWORD:-dealflow_root_change_me}
+    ports:
+      - "${DEALFLOW_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - dealflow
+
+  redis:
+    image: redis:7-alpine
+    container_name: dealflow-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${DEALFLOW_REDIS_PASSWORD:-dealflow_redis_change_me}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${DEALFLOW_REDIS_PASSWORD:-dealflow_redis_change_me}
+    ports:
+      - "${DEALFLOW_REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - dealflow
+
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: dealflow-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://:29093,INTERNAL://:29092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${DEALFLOW_KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      CLUSTER_ID: ${DEALFLOW_KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+    ports:
+      - "${DEALFLOW_KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 30s
+    networks:
+      - dealflow
+
+  kafka-init:
+    image: apache/kafka:3.9.1
+    container_name: dealflow-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic rfp.uploaded --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic rfp.completed --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic rfp.requirements.extracted --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic rfp.capabilities.evaluated --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic proposal.generated --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic proposal.approved --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic rfp.failed --partitions 3 --replication-factor 1
+    restart: "no"
+    networks:
+      - dealflow
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: dealflow-qdrant
+    restart: unless-stopped
+    ports:
+      - "${DEALFLOW_QDRANT_HTTP_PORT:-6333}:6333"
+      - "${DEALFLOW_QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c ':> /dev/tcp/127.0.0.1/6333'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - dealflow
+
+  minio:
+    image: minio/minio:latest
+    container_name: dealflow-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${DEALFLOW_MINIO_ROOT_USER:-dealflow_admin}
+      MINIO_ROOT_PASSWORD: ${DEALFLOW_MINIO_ROOT_PASSWORD:-dealflow_minio_change_me}
+    ports:
+      - "${DEALFLOW_MINIO_PORT:-9000}:9000"
+      - "${DEALFLOW_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dealflow
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: dealflow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${DEALFLOW_MINIO_ROOT_USER:-dealflow_admin}
+      MINIO_ROOT_PASSWORD: ${DEALFLOW_MINIO_ROOT_PASSWORD:-dealflow_minio_change_me}
+      MINIO_BUCKET: ${DEALFLOW_MINIO_BUCKET:-dealflow}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+    restart: "no"
+    networks:
+      - dealflow
+
+  migration:
+    <<: *app-service
+    container_name: dealflow-migration
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app-service
+    container_name: dealflow-api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on: *app-dependencies
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  rfp-worker:
+    <<: *app-service
+    container_name: dealflow-rfp-worker
+    command: ["python", "-m", "app.workers.rfp_worker"]
+    depends_on: *app-dependencies
+    restart: unless-stopped
+
+  requirement-worker:
+    <<: *app-service
+    container_name: dealflow-requirement-worker
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -z "$$LLM_API_KEY" ] && [ -z "$$ZAI_API_KEY" ] && [ -z "$$OPENAI_API_KEY" ]; then
+          echo 'LLM_API_KEY or ZAI_API_KEY is not configured; requirement-worker is disabled.';
+          exit 0;
+        fi;
+        exec python -m app.workers.requirement_worker
+    depends_on: *app-dependencies
+    restart: on-failure
+
+  capability-worker:
+    <<: *app-service
+    container_name: dealflow-capability-worker
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -z "$$LLM_API_KEY" ] && [ -z "$$ZAI_API_KEY" ] && [ -z "$$OPENAI_API_KEY" ]; then
+          echo 'LLM_API_KEY or ZAI_API_KEY is not configured; capability-worker is disabled.';
+          exit 0;
+        fi;
+        exec python -m app.workers.capability_worker
+    depends_on: *app-dependencies
+    restart: on-failure
+
+  proposal-worker:
+    <<: *app-service
+    container_name: dealflow-proposal-worker
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -z "$$LLM_API_KEY" ] && [ -z "$$ZAI_API_KEY" ] && [ -z "$$OPENAI_API_KEY" ]; then
+          echo 'LLM_API_KEY or ZAI_API_KEY is not configured; proposal-worker is disabled.';
+          exit 0;
+        fi;
+        exec python -m app.workers.proposal_worker
+    depends_on: *app-dependencies
+    restart: on-failure
+
+networks:
+  dealflow:
+    name: dealflow-network
+
+volumes:
+  mysql_data:
+    name: dealflow-mysql-data
+  redis_data:
+    name: dealflow-redis-data
+  kafka_data:
+    name: dealflow-kafka-data
+  qdrant_data:
+    name: dealflow-qdrant-data
+  minio_data:
+    name: dealflow-minio-data
