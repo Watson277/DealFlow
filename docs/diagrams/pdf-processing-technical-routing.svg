@@ -1,240 +1,174 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1240" viewBox="0 0 2200 1240">
   <defs>
     <style>
       text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #17324d; }
-      .title { font-size: 38px; font-weight: 700; }
-      .subtitle { font-size: 19px; fill: #5d7185; }
-      .group-title { font-size: 22px; font-weight: 700; fill: #ffffff; }
-      .box-title { font-size: 20px; font-weight: 700; }
-      .label { font-size: 16px; font-weight: 600; }
+      .title { font-size: 42px; font-weight: 700; }
+      .subtitle { font-size: 20px; fill: #5d7185; }
+      .group-title { font-size: 23px; font-weight: 700; fill: #fff; }
+      .lane-title { font-size: 21px; font-weight: 700; }
+      .box-title { font-size: 18px; font-weight: 700; }
+      .label { font-size: 15px; font-weight: 600; }
       .small { font-size: 14px; fill: #526b82; }
       .tiny { font-size: 12px; fill: #63798d; }
       .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; }
       .arrow { fill: none; stroke: #55758f; stroke-width: 3; marker-end: url(#arrow); }
       .route { fill: none; stroke: #1599b8; stroke-width: 3; marker-end: url(#arrowCyan); }
-      .warn-line { fill: none; stroke: #d99112; stroke-width: 2.5; stroke-dasharray: 8 7; marker-end: url(#arrowAmber); }
-      .soft-line { fill: none; stroke: #99acbc; stroke-width: 2; stroke-dasharray: 5 6; }
+      .native { fill: none; stroke: #3775ba; stroke-width: 3; marker-end: url(#arrowBlue); }
+      .scan { fill: none; stroke: #d99112; stroke-width: 3; marker-end: url(#arrowAmber); }
+      .fusion { fill: none; stroke: #6552a5; stroke-width: 3; marker-end: url(#arrowPurple); }
+      .warn { fill: none; stroke: #d99112; stroke-width: 2.5; stroke-dasharray: 8 7; marker-end: url(#arrowAmber); }
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#55758f"/>
-    </marker>
-    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#1599b8"/>
-    </marker>
-    <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#d99112"/>
-    </marker>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
-      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#17324d" flood-opacity="0.10"/>
-    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L0 6 L9 3 z" fill="#55758f"/></marker>
+    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L0 6 L9 3 z" fill="#1599b8"/></marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L0 6 L9 3 z" fill="#3775ba"/></marker>
+    <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L0 6 L9 3 z" fill="#d99112"/></marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L0 6 L9 3 z" fill="#6552a5"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#17324d" flood-opacity=".10"/></filter>
   </defs>
 
-  <rect width="1920" height="1080" fill="#f7fafc"/>
-  <text x="70" y="58" class="title">PDF 处理技术框架与路由逻辑</text>
-  <text x="70" y="91" class="subtitle">页面级分类 · 多模态提取 · OCR 降级 · 版面结构化</text>
-  <rect x="1548" y="35" width="300" height="42" rx="21" fill="#e9f4f8"/>
-  <text x="1698" y="62" text-anchor="middle" class="label" fill="#167f9b">DocumentIR Pipeline v1.0</text>
+  <rect width="2200" height="1240" fill="#f7fafc"/>
+  <text x="60" y="58" class="title">PDF 处理技术框架与路由逻辑</text>
+  <text x="60" y="94" class="subtitle">原生文本与扫描件分流 · 扫描页先版面检测 · TSR / VLM 多模态提取 · Block Fusion 去重仲裁</text>
+  <rect x="1870" y="34" width="270" height="44" rx="22" fill="#fff0cb" stroke="#d99112"/>
+  <text x="2005" y="62" text-anchor="middle" class="label" fill="#9b6406">目标技术架构（待实现）</text>
 
-  <!-- Group 1: Input -->
-  <g filter="url(#shadow)">
-    <rect x="40" y="125" width="285" height="665" rx="20" fill="#ffffff" stroke="#b6c8d7" stroke-width="2"/>
-    <path d="M40 145 Q40 125 60 125 H305 Q325 125 325 145 V180 H40 Z" fill="#315f8c"/>
-  </g>
-  <text x="182" y="161" text-anchor="middle" class="group-title">1. 输入与预检</text>
+  <!-- 1 Input -->
+  <g filter="url(#shadow)"><rect x="35" y="125" width="260" height="865" rx="20" fill="#fff" stroke="#b6c8d7" stroke-width="2"/><path d="M35 145 Q35 125 55 125 H275 Q295 125 295 145 V180 H35 Z" fill="#315f8c"/></g>
+  <text x="165" y="161" text-anchor="middle" class="group-title">1. 输入与预检</text>
+  <rect x="68" y="220" width="194" height="78" rx="13" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
+  <text x="165" y="252" text-anchor="middle" class="box-title">PDF 文件</text><text x="165" y="278" text-anchor="middle" class="tiny">bytes · filename · document_id</text>
+  <path d="M165 298 V338" class="arrow"/>
+  <rect x="55" y="340" width="220" height="126" rx="13" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
+  <text x="165" y="374" text-anchor="middle" class="box-title">文件预检</text><text x="165" y="403" text-anchor="middle" class="small">有效性 · 加密状态</text><text x="165" y="428" text-anchor="middle" class="small">页数上限 · PDF 元数据</text><text x="165" y="452" text-anchor="middle" class="mono">PDFPreflightValidator</text>
+  <path d="M165 466 V512" class="arrow"/>
+  <rect x="68" y="514" width="194" height="90" rx="13" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
+  <text x="165" y="549" text-anchor="middle" class="box-title">逐页加载</text><text x="165" y="579" text-anchor="middle" class="small">PyMuPDF Page</text>
+  <path d="M55 400 H25 V704 H66" class="warn"/>
+  <rect x="66" y="676" width="198" height="78" rx="12" fill="#fdeaea" stroke="#b64342" stroke-width="2"/>
+  <text x="165" y="708" text-anchor="middle" class="label" fill="#9b3332">预检失败</text><text x="165" y="735" text-anchor="middle" class="small">拒绝处理</text>
 
-  <rect x="82" y="218" width="200" height="78" rx="14" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
-  <text x="182" y="251" text-anchor="middle" class="box-title">PDF 文件</text>
-  <text x="182" y="277" text-anchor="middle" class="small">bytes + filename + document_id</text>
+  <!-- 2 Router -->
+  <g filter="url(#shadow)"><rect x="320" y="125" width="310" height="865" rx="20" fill="#fff" stroke="#8ac7d5" stroke-width="2"/><path d="M320 145 Q320 125 340 125 H610 Q630 125 630 145 V180 H320 Z" fill="#1599b8"/></g>
+  <text x="475" y="161" text-anchor="middle" class="group-title">2. 页面质量路由</text>
+  <path d="M262 559 H317" class="route"/>
+  <rect x="350" y="211" width="250" height="172" rx="15" fill="#e9f7fa" stroke="#1599b8" stroke-width="2.5"/>
+  <text x="475" y="245" text-anchor="middle" class="box-title">页面质量路由器</text>
+  <text x="378" y="282" class="small">● 有效字符数</text><text x="378" y="310" class="small">● 乱码比例</text><text x="378" y="338" class="small">● 图片覆盖率</text><text x="378" y="366" class="small">● 文本覆盖率</text>
+  <path d="M475 383 V422" class="route"/><path d="M475 422 H404 V458" class="route"/><path d="M475 422 V592" class="route"/><path d="M475 422 H552 V726" class="route"/>
+  <rect x="350" y="460" width="250" height="90" rx="12" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
+  <text x="475" y="493" text-anchor="middle" class="box-title">原生文本页</text><text x="475" y="520" text-anchor="middle" class="small">文本充足 · 乱码低</text><text x="475" y="540" text-anchor="middle" class="tiny">Native Route</text>
+  <rect x="350" y="594" width="250" height="90" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
+  <text x="475" y="627" text-anchor="middle" class="box-title">扫描页</text><text x="475" y="654" text-anchor="middle" class="small">图片覆盖高 · 文本不足</text><text x="475" y="674" text-anchor="middle" class="tiny">Scanned Route</text>
+  <rect x="350" y="728" width="250" height="90" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
+  <text x="475" y="761" text-anchor="middle" class="box-title">混合低质量页</text><text x="475" y="788" text-anchor="middle" class="small">文字 + 图片 · 质量不足</text><text x="475" y="808" text-anchor="middle" class="tiny">Mixed Route</text>
+  <rect x="350" y="862" width="250" height="70" rx="12" fill="#f3f7fa" stroke="#b6c8d7"/>
+  <text x="475" y="890" text-anchor="middle" class="small">空白页：保留 PageIR</text><text x="475" y="915" text-anchor="middle" class="tiny">page_type = empty + warning</text>
 
-  <path d="M182 296 V337" class="arrow"/>
-  <rect x="67" y="340" width="230" height="126" rx="14" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
-  <text x="182" y="374" text-anchor="middle" class="box-title">文件预检</text>
-  <text x="182" y="402" text-anchor="middle" class="small">有效性 · 加密状态</text>
-  <text x="182" y="426" text-anchor="middle" class="small">页数上限 · PDF 元数据</text>
-  <text x="182" y="450" text-anchor="middle" class="mono">PDFPreflightValidator</text>
+  <!-- 3 Extraction -->
+  <g filter="url(#shadow)"><rect x="655" y="125" width="995" height="865" rx="20" fill="#fff" stroke="#b6c8d7" stroke-width="2"/><path d="M655 145 Q655 125 675 125 H1630 Q1650 125 1650 145 V180 H655 Z" fill="#315f8c"/></g>
+  <text x="1152" y="161" text-anchor="middle" class="group-title">3. 分路版面与多模态提取</text>
 
-  <path d="M182 466 V513" class="arrow"/>
-  <rect x="82" y="516" width="200" height="90" rx="14" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
-  <text x="182" y="550" text-anchor="middle" class="box-title">逐页加载</text>
-  <text x="182" y="580" text-anchor="middle" class="small">PyMuPDF Page</text>
+  <!-- Native route -->
+  <rect x="680" y="205" width="945" height="280" rx="16" fill="#f4f8fc" stroke="#8bb1d6" stroke-width="2"/>
+  <rect x="680" y="205" width="150" height="280" rx="16" fill="#dceafa"/>
+  <text x="755" y="252" text-anchor="middle" class="lane-title">原生文本页</text><text x="755" y="282" text-anchor="middle" class="small">直接结构提取</text><text x="755" y="308" text-anchor="middle" class="tiny">不进入 OCR</text>
+  <path d="M600 505 H650 V273 H678" class="native"/>
+  <rect x="860" y="228" width="220" height="76" rx="11" fill="#fff" stroke="#3775ba" stroke-width="2"/>
+  <text x="970" y="258" text-anchor="middle" class="box-title">Native Text</text><text x="970" y="284" text-anchor="middle" class="mono">PyMuPDF get_text</text>
+  <path d="M1080 266 H1110" class="native"/><rect x="1112" y="228" width="172" height="76" rx="11" fill="#fff" stroke="#3775ba" stroke-width="2"/>
+  <text x="1198" y="258" text-anchor="middle" class="box-title">TEXT Block</text><text x="1198" y="284" text-anchor="middle" class="tiny">text · font · bbox</text>
 
-  <path d="M67 398 H30 V675 H68" class="warn-line"/>
-  <rect x="68" y="645" width="228" height="80" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="182" y="678" text-anchor="middle" class="label" fill="#9b6406">预检失败</text>
-  <text x="182" y="704" text-anchor="middle" class="small">拒绝处理 · 不进入页面解析</text>
+  <rect x="860" y="326" width="220" height="76" rx="11" fill="#fff" stroke="#3775ba" stroke-width="2"/>
+  <text x="970" y="356" text-anchor="middle" class="box-title">Native Table</text><text x="970" y="382" text-anchor="middle" class="mono">PyMuPDF find_tables</text>
+  <path d="M1080 364 H1110" class="native"/><rect x="1112" y="326" width="172" height="76" rx="11" fill="#fff" stroke="#3775ba" stroke-width="2"/>
+  <text x="1198" y="356" text-anchor="middle" class="box-title">TABLE Block</text><text x="1198" y="382" text-anchor="middle" class="tiny">cells · Markdown · bbox</text>
 
-  <!-- Group 2: Router -->
-  <g filter="url(#shadow)">
-    <rect x="355" y="125" width="330" height="665" rx="20" fill="#ffffff" stroke="#8ac7d5" stroke-width="2"/>
-    <path d="M355 145 Q355 125 375 125 H665 Q685 125 685 145 V180 H355 Z" fill="#1599b8"/>
-  </g>
-  <text x="520" y="161" text-anchor="middle" class="group-title">2. 页面质量路由</text>
-  <path d="M282 560 H342 V294 H391" class="route"/>
+  <rect x="860" y="424" width="220" height="42" rx="11" fill="#fff" stroke="#8098aa" stroke-width="2"/>
+  <text x="970" y="451" text-anchor="middle" class="label">Native Image Detection</text>
+  <path d="M1080 445 H1110" class="native"/><rect x="1112" y="424" width="172" height="42" rx="11" fill="#fff" stroke="#8098aa" stroke-width="2"/>
+  <text x="1198" y="451" text-anchor="middle" class="label">IMAGE Block</text>
+  <rect x="1315" y="228" width="275" height="238" rx="13" fill="#edf4fb" stroke="#8bb1d6"/>
+  <text x="1452" y="263" text-anchor="middle" class="box-title">原生路径规则</text>
+  <text x="1340" y="302" class="small">✓ get_text 提取可选文字</text><text x="1340" y="334" class="small">✓ find_tables 仅处理原生表格</text><text x="1340" y="366" class="small">✓ 图片保持独立 IMAGE Block</text><text x="1340" y="414" class="small">× 不对整页重复 OCR</text><text x="1340" y="446" class="small">× 不用 TSR 重建原生表格</text>
 
-  <rect x="393" y="207" width="254" height="174" rx="16" fill="#e9f7fa" stroke="#1599b8" stroke-width="2.5"/>
-  <text x="520" y="242" text-anchor="middle" class="box-title">页面质量路由器</text>
-  <text x="420" y="278" class="small">● 有效字符数</text>
-  <text x="420" y="306" class="small">● 乱码比例</text>
-  <text x="420" y="334" class="small">● 图片覆盖率</text>
-  <text x="420" y="362" class="small">● 文本覆盖率</text>
+  <!-- Scanned/mixed route -->
+  <rect x="680" y="510" width="945" height="455" rx="16" fill="#fffaf0" stroke="#e4ad47" stroke-width="2"/>
+  <rect x="680" y="510" width="150" height="455" rx="16" fill="#fff0cb"/>
+  <text x="755" y="563" text-anchor="middle" class="lane-title">扫描 / 混合页</text><text x="755" y="594" text-anchor="middle" class="small">先检测区域</text><text x="755" y="620" text-anchor="middle" class="small">再分类处理</text>
+  <path d="M600 639 H650 V580 H678" class="scan"/><path d="M600 773 H640 V620 H678" class="scan"/>
 
-  <path d="M520 381 V420" class="route"/>
-  <path d="M520 420 H430 V452" class="route"/>
-  <path d="M520 420 V545" class="route"/>
-  <path d="M520 420 H610 V638" class="route"/>
+  <rect x="855" y="540" width="176" height="72" rx="11" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
+  <text x="943" y="570" text-anchor="middle" class="box-title">页面渲染</text><text x="943" y="595" text-anchor="middle" class="small">250 DPI</text>
+  <path d="M1031 576 H1060" class="scan"/>
+  <rect x="1062" y="530" width="220" height="92" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2.5"/>
+  <text x="1172" y="564" text-anchor="middle" class="box-title">Layout Detection</text><text x="1172" y="590" text-anchor="middle" class="small">文本区 · 表格区 · 图片区</text><text x="1172" y="611" text-anchor="middle" class="tiny">region bbox + crop</text>
 
-  <rect x="380" y="455" width="220" height="76" rx="12" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
-  <text x="490" y="484" text-anchor="middle" class="label">原生文字页</text>
-  <text x="490" y="511" text-anchor="middle" class="small">文本充足 · 乱码低</text>
+  <path d="M1172 622 V655 H875 V684" class="scan"/><path d="M1172 655 V780" class="scan"/><path d="M1172 655 H1430 V684" class="scan"/>
+  <rect x="850" y="686" width="180" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="940" y="716" text-anchor="middle" class="box-title">文本区 Crop</text><text x="940" y="742" text-anchor="middle" class="small">Region OCR</text>
+  <path d="M1030 722 H1054" class="scan"/><rect x="1056" y="686" width="155" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1133" y="716" text-anchor="middle" class="box-title">OCR</text><text x="1133" y="742" text-anchor="middle" class="tiny">chi_sim + eng</text>
+  <path d="M1211 722 H1235" class="scan"/><rect x="1237" y="686" width="160" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1317" y="716" text-anchor="middle" class="box-title">OCR Block</text><text x="1317" y="742" text-anchor="middle" class="tiny">text · confidence · bbox</text>
 
-  <rect x="380" y="548" width="220" height="76" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="490" y="577" text-anchor="middle" class="label">扫描图片页</text>
-  <text x="490" y="604" text-anchor="middle" class="small">图片覆盖高 · 文本不足</text>
+  <rect x="850" y="782" width="180" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="940" y="812" text-anchor="middle" class="box-title">表格区 Crop</text><text x="940" y="838" text-anchor="middle" class="small">Table Region</text>
+  <path d="M1030 818 H1054" class="scan"/><rect x="1056" y="782" width="155" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1133" y="812" text-anchor="middle" class="box-title">TSR</text><text x="1133" y="838" text-anchor="middle" class="tiny">Table Structure Recognition</text>
+  <path d="M1211 818 H1235" class="scan"/><rect x="1237" y="782" width="160" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1317" y="812" text-anchor="middle" class="box-title">Cell OCR</text><text x="1317" y="838" text-anchor="middle" class="tiny">row · col · span</text>
+  <path d="M1397 818 H1421" class="scan"/><rect x="1423" y="782" width="170" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1508" y="812" text-anchor="middle" class="box-title">TABLE Block</text><text x="1508" y="838" text-anchor="middle" class="tiny">cells · Markdown · bbox</text>
 
-  <rect x="380" y="641" width="220" height="76" rx="12" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="490" y="670" text-anchor="middle" class="label">混合低质量页</text>
-  <text x="490" y="697" text-anchor="middle" class="small">文字 + 图片 · 质量不足</text>
+  <rect x="850" y="878" width="180" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="940" y="908" text-anchor="middle" class="box-title">图片区 Crop</text><text x="940" y="934" text-anchor="middle" class="small">Figure Region</text>
+  <path d="M1030 914 H1054" class="scan"/><rect x="1056" y="878" width="155" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1133" y="908" text-anchor="middle" class="box-title">VLM</text><text x="1133" y="934" text-anchor="middle" class="tiny">caption · visual text</text>
+  <path d="M1211 914 H1235" class="scan"/><rect x="1237" y="878" width="160" height="72" rx="11" fill="#fff" stroke="#d99112" stroke-width="2"/>
+  <text x="1317" y="908" text-anchor="middle" class="box-title">IMAGE Block</text><text x="1317" y="934" text-anchor="middle" class="tiny">asset · caption · bbox</text>
 
-  <rect x="390" y="740" width="260" height="30" rx="15" fill="#f3f7fa"/>
-  <text x="520" y="761" text-anchor="middle" class="tiny">page_type: text / scanned / mixed / empty</text>
+  <!-- 4 Fusion/output -->
+  <g filter="url(#shadow)"><rect x="1675" y="125" width="490" height="865" rx="20" fill="#fff" stroke="#b6a9db" stroke-width="2"/><path d="M1675 145 Q1675 125 1695 125 H2145 Q2165 125 2165 145 V180 H1675 Z" fill="#6552a5"/></g>
+  <text x="1920" y="161" text-anchor="middle" class="group-title">4. Block Fusion 与统一输出</text>
+  <path d="M1284 266 H1300 M1284 364 H1300 M1284 445 H1300 M1300 266 V445" fill="none" stroke="#6552a5" stroke-width="3"/><path d="M1300 266 V194 H1652 V290 H1700" class="fusion"/><path d="M1397 722 H1616 V330 H1700" class="fusion"/><path d="M1593 818 H1604 V370 H1700" class="fusion"/><path d="M1397 914 H1592 V410 H1700" class="fusion"/>
+  <rect x="1702" y="216" width="436" height="260" rx="15" fill="#f1eefb" stroke="#6552a5" stroke-width="2.5"/>
+  <text x="1920" y="254" text-anchor="middle" class="lane-title">Block Fusion</text>
+  <text x="1730" y="294" class="small">① Native Text 与 OCR 重复文本去重</text>
+  <text x="1730" y="327" class="small">② TABLE 区域与普通文本区域去重</text>
+  <text x="1730" y="360" class="small">③ bbox + IoU + 文本相似度匹配</text>
+  <text x="1730" y="393" class="small">④ 冲突仲裁：native text &gt; OCR</text>
+  <text x="1730" y="426" class="small">⑤ TABLE 结构优先于表格区散乱文本</text>
+  <text x="1730" y="456" class="tiny">输出：唯一 Block 集合 + reading_order</text>
+  <path d="M1920 476 V512" class="fusion"/>
+  <rect x="1702" y="514" width="202" height="104" rx="14" fill="#f1eefb" stroke="#6552a5" stroke-width="2"/>
+  <text x="1803" y="550" text-anchor="middle" class="box-title">PageIR</text><text x="1803" y="578" text-anchor="middle" class="tiny">page_type · blocks</text><text x="1803" y="597" text-anchor="middle" class="tiny">warnings · metadata</text>
+  <path d="M1904 566 H1934" class="fusion"/>
+  <rect x="1936" y="514" width="202" height="104" rx="14" fill="#e8f7ee" stroke="#2f9f62" stroke-width="2"/>
+  <text x="2037" y="550" text-anchor="middle" class="box-title">DocumentIR v1.0</text><text x="2037" y="578" text-anchor="middle" class="tiny">pages · bbox · SHA-256</text><text x="2037" y="597" text-anchor="middle" class="tiny">status · warnings</text>
+  <path d="M2037 618 V661 H1920" class="arrow"/>
+  <rect x="1702" y="664" width="436" height="128" rx="14" fill="#e8f7ee" stroke="#2f9f62" stroke-width="2"/>
+  <text x="1920" y="700" text-anchor="middle" class="box-title" fill="#207b4b">统一持久化</text>
+  <rect x="1730" y="722" width="214" height="42" rx="9" fill="#fff" stroke="#2f9f62"/><text x="1837" y="749" text-anchor="middle" class="mono">document-ir.v1.json</text>
+  <rect x="1965" y="722" width="145" height="42" rx="9" fill="#fff" stroke="#2f9f62"/><text x="2037" y="749" text-anchor="middle" class="mono">parsed.txt</text>
+  <rect x="1702" y="835" width="436" height="112" rx="14" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
+  <text x="1920" y="870" text-anchor="middle" class="box-title" fill="#9b6406">状态与告警</text><text x="1920" y="901" text-anchor="middle" class="small">非致命降级 → partial_success + warnings</text><text x="1920" y="929" text-anchor="middle" class="small">最终无可提取文本 → 解析失败</text>
 
-  <!-- Group 3: Extraction -->
-  <g filter="url(#shadow)">
-    <rect x="715" y="125" width="655" height="665" rx="20" fill="#ffffff" stroke="#b6c8d7" stroke-width="2"/>
-    <path d="M715 145 Q715 125 735 125 H1350 Q1370 125 1370 145 V180 H715 Z" fill="#315f8c"/>
-  </g>
-  <text x="1042" y="161" text-anchor="middle" class="group-title">3. 多模态并行提取</text>
+  <!-- Bottom design notes -->
+  <g filter="url(#shadow)"><rect x="35" y="1020" width="2130" height="140" rx="18" fill="#fff" stroke="#d7e1e8" stroke-width="2"/></g>
+  <text x="70" y="1056" class="box-title">关键设计约束</text>
+  <rect x="250" y="1038" width="430" height="94" rx="12" fill="#eaf2fa" stroke="#3775ba"/>
+  <text x="465" y="1068" text-anchor="middle" class="label">原生 PDF 表格</text><text x="465" y="1095" text-anchor="middle" class="small">只走 find_tables，不进入扫描 TSR</text><text x="465" y="1118" text-anchor="middle" class="tiny">Native Table → TABLE Block</text>
+  <rect x="705" y="1038" width="430" height="94" rx="12" fill="#fff4df" stroke="#d99112"/>
+  <text x="920" y="1068" text-anchor="middle" class="label">扫描 PDF 表格</text><text x="920" y="1095" text-anchor="middle" class="small">Layout → Crop → TSR → Cell OCR</text><text x="920" y="1118" text-anchor="middle" class="tiny">结构与单元格内容分两步恢复</text>
+  <rect x="1160" y="1038" width="430" height="94" rx="12" fill="#f1eefb" stroke="#6552a5"/>
+  <text x="1375" y="1068" text-anchor="middle" class="label">跨通道去重</text><text x="1375" y="1095" text-anchor="middle" class="small">IoU + bbox + 文本相似度</text><text x="1375" y="1118" text-anchor="middle" class="tiny">先融合，再生成 PageIR</text>
+  <rect x="1615" y="1038" width="510" height="94" rx="12" fill="#fdeaea" stroke="#b64342"/>
+  <text x="1870" y="1068" text-anchor="middle" class="label" fill="#9b3332">实现状态说明</text><text x="1870" y="1095" text-anchor="middle" class="small">当前代码已有原生解析、整页 OCR 与版面分析</text><text x="1870" y="1118" text-anchor="middle" class="tiny">Layout Detection / TSR / VLM / Block Fusion 尚待实现</text>
 
-  <!-- Native text lane -->
-  <rect x="742" y="205" width="602" height="122" rx="14" fill="#f4f8fc" stroke="#8bb1d6" stroke-width="2"/>
-  <rect x="742" y="205" width="116" height="122" rx="14" fill="#dceafa"/>
-  <text x="800" y="252" text-anchor="middle" class="label">文字通道</text>
-  <text x="800" y="278" text-anchor="middle" class="tiny">原生页</text>
-  <path d="M600 493 H700 V266 H886" class="arrow"/>
-  <rect x="888" y="224" width="250" height="84" rx="12" fill="#eaf2fa" stroke="#3775ba" stroke-width="2"/>
-  <text x="1013" y="255" text-anchor="middle" class="label">原生文本提取</text>
-  <text x="1013" y="281" text-anchor="middle" class="small">文本 · 字体 · 字号 · bbox</text>
-  <rect x="1160" y="232" width="155" height="66" rx="11" fill="#ffffff" stroke="#3775ba" stroke-width="2"/>
-  <text x="1237" y="258" text-anchor="middle" class="mono">get_text</text>
-  <text x="1237" y="280" text-anchor="middle" class="tiny">TEXT Block</text>
-  <path d="M1138 266 H1158" class="arrow"/>
-
-  <!-- OCR lane -->
-  <rect x="742" y="348" width="602" height="176" rx="14" fill="#fffaf0" stroke="#e4ad47" stroke-width="2"/>
-  <rect x="742" y="348" width="116" height="176" rx="14" fill="#fff0cb"/>
-  <text x="800" y="409" text-anchor="middle" class="label">OCR 通道</text>
-  <text x="800" y="436" text-anchor="middle" class="tiny">扫描 / 混合页</text>
-  <path d="M600 586 H695 V408 H740" class="warn-line"/>
-  <path d="M600 679 H710 V459 H740" class="warn-line"/>
-  <rect x="880" y="372" width="142" height="72" rx="11" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="951" y="402" text-anchor="middle" class="label">整页渲染</text>
-  <text x="951" y="426" text-anchor="middle" class="small">250 DPI</text>
-  <path d="M1022 408 H1048" class="warn-line"/>
-  <rect x="1050" y="372" width="150" height="72" rx="11" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="1125" y="402" text-anchor="middle" class="label">Tesseract OCR</text>
-  <text x="1125" y="426" text-anchor="middle" class="small">chi_sim + eng</text>
-  <path d="M1200 408 H1224" class="warn-line"/>
-  <rect x="1226" y="372" width="96" height="72" rx="11" fill="#ffffff" stroke="#d99112" stroke-width="2"/>
-  <text x="1274" y="400" text-anchor="middle" class="label">OCR</text>
-  <text x="1274" y="424" text-anchor="middle" class="tiny">TEXT Block</text>
-  <text x="884" y="476" class="small">成功：替换低质量原生文本块</text>
-  <text x="884" y="503" class="small">失败/关闭：保留原生块 + ParseWarning</text>
-
-  <!-- Image lane -->
-  <rect x="742" y="546" width="602" height="98" rx="14" fill="#f5f8fa" stroke="#aabcc9" stroke-width="2"/>
-  <rect x="742" y="546" width="116" height="98" rx="14" fill="#e7eef3"/>
-  <text x="800" y="588" text-anchor="middle" class="label">图片通道</text>
-  <text x="800" y="613" text-anchor="middle" class="tiny">所有页面并行</text>
-  <rect x="884" y="561" width="246" height="67" rx="11" fill="#ffffff" stroke="#8098aa" stroke-width="2"/>
-  <text x="1007" y="588" text-anchor="middle" class="label">图片区域检测</text>
-  <text x="1007" y="612" text-anchor="middle" class="small">bbox · 元数据</text>
-  <path d="M1130 594 H1170" class="arrow"/>
-  <rect x="1172" y="561" width="150" height="67" rx="11" fill="#ffffff" stroke="#8098aa" stroke-width="2"/>
-  <text x="1247" y="602" text-anchor="middle" class="label">IMAGE Block</text>
-
-  <!-- Table lane -->
-  <rect x="742" y="665" width="602" height="98" rx="14" fill="#f5f8fa" stroke="#aabcc9" stroke-width="2"/>
-  <rect x="742" y="665" width="116" height="98" rx="14" fill="#e7eef3"/>
-  <text x="800" y="706" text-anchor="middle" class="label">表格通道</text>
-  <text x="800" y="731" text-anchor="middle" class="tiny">所有页面并行</text>
-  <rect x="884" y="680" width="246" height="67" rx="11" fill="#ffffff" stroke="#8098aa" stroke-width="2"/>
-  <text x="1007" y="706" text-anchor="middle" class="label">原生表格检测</text>
-  <text x="1007" y="730" text-anchor="middle" class="mono">PyMuPDF find_tables</text>
-  <path d="M1130 713 H1170" class="arrow"/>
-  <rect x="1172" y="680" width="150" height="67" rx="11" fill="#ffffff" stroke="#8098aa" stroke-width="2"/>
-  <text x="1247" y="706" text-anchor="middle" class="label">TABLE Block</text>
-  <text x="1247" y="731" text-anchor="middle" class="tiny">Markdown + bbox</text>
-
-  <!-- Loaded pages feed image and table detection independently from text quality routing. -->
-  <path d="M282 580 H338 V806 H700 V594 H740" class="soft-line" marker-end="url(#arrow)"/>
-  <path d="M700 713 H740" class="soft-line" marker-end="url(#arrow)"/>
-
-  <!-- Group 4: Structuring -->
-  <g filter="url(#shadow)">
-    <rect x="1400" y="125" width="480" height="665" rx="20" fill="#ffffff" stroke="#b6a9db" stroke-width="2"/>
-    <path d="M1400 145 Q1400 125 1420 125 H1860 Q1880 125 1880 145 V180 H1400 Z" fill="#6552a5"/>
-  </g>
-  <text x="1640" y="161" text-anchor="middle" class="group-title">4. 合并、版面与统一输出</text>
-
-  <path d="M1315 265 H1382 V258 H1430" class="arrow"/>
-  <path d="M1322 408 H1382 V258 H1430" class="arrow"/>
-  <path d="M1322 594 H1382 V258 H1430" class="arrow"/>
-  <path d="M1322 713 H1382 V258 H1430" class="arrow"/>
-  <rect x="1432" y="211" width="416" height="94" rx="14" fill="#f1eefb" stroke="#6552a5" stroke-width="2"/>
-  <text x="1640" y="247" text-anchor="middle" class="box-title">块候选合并</text>
-  <text x="1640" y="276" text-anchor="middle" class="small">TEXT / OCR + IMAGE + TABLE</text>
-  <text x="1640" y="296" text-anchor="middle" class="tiny">来源：native / ocr / derived</text>
-
-  <path d="M1640 305 V342" class="arrow"/>
-  <rect x="1432" y="345" width="416" height="128" rx="14" fill="#f1eefb" stroke="#6552a5" stroke-width="2"/>
-  <text x="1640" y="379" text-anchor="middle" class="box-title">版面结构分析</text>
-  <text x="1510" y="415" class="small">● 页眉 / 页脚</text>
-  <text x="1665" y="415" class="small">● 标题 / 列表</text>
-  <text x="1510" y="445" class="small">● 多栏检测</text>
-  <text x="1665" y="445" class="small">● 阅读顺序 / 表格去重</text>
-
-  <path d="M1640 473 V508" class="arrow"/>
-  <rect x="1432" y="510" width="188" height="92" rx="14" fill="#f1eefb" stroke="#6552a5" stroke-width="2"/>
-  <text x="1526" y="546" text-anchor="middle" class="box-title">PageIR</text>
-  <text x="1526" y="573" text-anchor="middle" class="tiny">page_type · blocks</text>
-  <text x="1526" y="590" text-anchor="middle" class="tiny">warnings · metadata</text>
-  <path d="M1620 556 H1658" class="arrow"/>
-  <rect x="1660" y="510" width="188" height="92" rx="14" fill="#e8f7ee" stroke="#2f9f62" stroke-width="2"/>
-  <text x="1754" y="546" text-anchor="middle" class="box-title">DocumentIR v1.0</text>
-  <text x="1754" y="573" text-anchor="middle" class="tiny">pages · bbox · SHA-256</text>
-  <text x="1754" y="590" text-anchor="middle" class="tiny">status · warnings</text>
-
-  <path d="M1754 602 V635 H1640" class="arrow"/>
-  <rect x="1432" y="638" width="416" height="105" rx="14" fill="#e8f7ee" stroke="#2f9f62" stroke-width="2"/>
-  <text x="1640" y="672" text-anchor="middle" class="box-title" fill="#207b4b">统一持久化</text>
-  <rect x="1470" y="690" width="170" height="36" rx="9" fill="#ffffff" stroke="#2f9f62"/>
-  <text x="1555" y="714" text-anchor="middle" class="mono">document-ir.v1.json</text>
-  <rect x="1660" y="690" width="150" height="36" rx="9" fill="#ffffff" stroke="#2f9f62"/>
-  <text x="1735" y="714" text-anchor="middle" class="mono">parsed.txt</text>
-
-  <!-- Bottom degradation lane -->
-  <g filter="url(#shadow)">
-    <rect x="40" y="825" width="1840" height="148" rx="18" fill="#fffaf0" stroke="#e4ad47" stroke-width="2"/>
-  </g>
-  <text x="80" y="863" class="box-title" fill="#9b6406">降级与失败路由</text>
-  <rect x="300" y="847" width="460" height="82" rx="13" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="530" y="879" text-anchor="middle" class="label">OCR 失败 / OCR 关闭</text>
-  <text x="530" y="906" text-anchor="middle" class="small">保留原生文本块 → ParseWarning</text>
-  <rect x="790" y="847" width="460" height="82" rx="13" fill="#fff4df" stroke="#d99112" stroke-width="2"/>
-  <text x="1020" y="879" text-anchor="middle" class="label">表格检测失败等非致命问题</text>
-  <text x="1020" y="906" text-anchor="middle" class="small">DocumentIR.status = partial_success</text>
-  <rect x="1280" y="847" width="550" height="82" rx="13" fill="#fdeaea" stroke="#b64342" stroke-width="2"/>
-  <text x="1555" y="879" text-anchor="middle" class="label" fill="#9b3332">最终无可提取文本</text>
-  <text x="1555" y="906" text-anchor="middle" class="small">DocumentParser 终止 → 解析失败</text>
-  <path d="M1125 524 V810 H530 V845" class="warn-line"/>
-  <path d="M1007 747 V803 H1020 V845" class="warn-line"/>
-  <path d="M1250 930 H1278" class="warn-line"/>
-
-  <!-- Legend -->
-  <rect x="40" y="1005" width="1840" height="48" rx="12" fill="#ffffff" stroke="#d7e1e8"/>
-  <circle cx="260" cy="1029" r="8" fill="#3775ba"/><text x="278" y="1035" class="small">蓝色：原生提取</text>
-  <circle cx="560" cy="1029" r="8" fill="#1599b8"/><text x="578" y="1035" class="small">青色：质量路由</text>
-  <circle cx="860" cy="1029" r="8" fill="#d99112"/><text x="878" y="1035" class="small">琥珀色：OCR 与降级</text>
-  <circle cx="1195" cy="1029" r="8" fill="#6552a5"/><text x="1213" y="1035" class="small">紫色：版面结构</text>
-  <circle cx="1505" cy="1029" r="8" fill="#2f9f62"/><text x="1523" y="1035" class="small">绿色：统一输出</text>
+  <rect x="35" y="1182" width="2130" height="40" rx="12" fill="#fff" stroke="#d7e1e8"/>
+  <circle cx="360" cy="1202" r="8" fill="#3775ba"/><text x="378" y="1208" class="small">蓝色：原生路径</text>
+  <circle cx="730" cy="1202" r="8" fill="#1599b8"/><text x="748" y="1208" class="small">青色：页面路由</text>
+  <circle cx="1100" cy="1202" r="8" fill="#d99112"/><text x="1118" y="1208" class="small">琥珀色：扫描多模态路径</text>
+  <circle cx="1540" cy="1202" r="8" fill="#6552a5"/><text x="1558" y="1208" class="small">紫色：Block Fusion</text>
+  <circle cx="1900" cy="1202" r="8" fill="#2f9f62"/><text x="1918" y="1208" class="small">绿色：统一输出</text>
 </svg>
