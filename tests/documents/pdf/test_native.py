@@ -32,12 +32,13 @@ def test_native_parser_extracts_text_image_layout_and_bboxes() -> None:
 
     assert parsed.document_type is PDFDocumentType.TEXT_BASED
     assert parsed.page_count == 1
-    assert parsed.parser_version == "native-ocr-layout-1.0"
+    assert parsed.parser_version == "page-routing-layout-2.0"
     assert "--- Page 1 ---" in parsed.text
     assert "DealFlow native requirement" in parsed.text
 
     result_page = parsed.pages[0]
     assert result_page.page_type is PDFPageType.TEXT
+    assert result_page.metadata["routing"]["route"] == "native_pymupdf"
     assert result_page.width == pytest.approx(300)
     assert result_page.height == pytest.approx(400)
     assert [block.reading_order for block in result_page.blocks] == list(
@@ -76,6 +77,7 @@ def test_native_parser_classifies_scanned_and_mixed_documents() -> None:
 
     assert parsed.document_type is PDFDocumentType.MIXED
     assert [page.page_type for page in parsed.pages] == [PDFPageType.SCANNED, PDFPageType.TEXT]
+    assert parsed.ir.metadata["page_types"] == ["scanned", "text"]
     quality_metadata = parsed.pages[0].metadata["quality"]
     assert isinstance(quality_metadata, dict)
     assert quality_metadata["requires_ocr"] is True

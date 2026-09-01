@@ -29,3 +29,11 @@ class PDFOCRError(DocumentProcessingError):
     def __init__(self, code: PDFOCRErrorCode, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class PDFTableRecognitionError(DocumentProcessingError):
+    """Raised when a scanned table region cannot be reconstructed safely."""
+
+
+class PDFVisionError(DocumentProcessingError):
+    """Raised when an enabled vision provider cannot analyze an image region."""

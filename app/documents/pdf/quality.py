@@ -105,8 +105,9 @@ class PageQualityDetector:
             return PDFPageType.SCANNED, True
 
         if image_coverage >= self.config.mixed_image_coverage_threshold:
-            needs_ocr = effective_char_count < self.config.min_effective_chars
-            return PDFPageType.MIXED, needs_ocr
+            # Mixed pages must enter the region router even when their native text is
+            # readable: image/table areas still require independent extraction.
+            return PDFPageType.MIXED, True
 
         return PDFPageType.TEXT, False
 

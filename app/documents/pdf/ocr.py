@@ -45,6 +45,13 @@ class OCRProvider(Protocol):
 
     def recognize_page(self, page: pymupdf.Page, page_number: int) -> OCRPageResult: ...
 
+    def recognize_region(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        bbox: BoundingBox,
+    ) -> OCRPageResult: ...
+
 
 @dataclass(frozen=True, slots=True)
 class _OCRWord:
@@ -67,6 +74,23 @@ class TesseractOCRProvider:
         self.config = config
 
     def recognize_page(self, page: pymupdf.Page, page_number: int) -> OCRPageResult:
+        return self._recognize(page, page_number, bbox=None)
+
+    def recognize_region(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        bbox: BoundingBox,
+    ) -> OCRPageResult:
+        return self._recognize(page, page_number, bbox=bbox)
+
+    def _recognize(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        *,
+        bbox: BoundingBox | None,
+    ) -> OCRPageResult:
         executable = shutil.which(self.config.ocr_executable)
         if executable is None:
             raise PDFOCRError(
@@ -74,10 +98,18 @@ class TesseractOCRProvider:
                 "Tesseract executable is not installed or not on PATH",
             )
 
+        clip = (
+            pymupdf.Rect(  # type: ignore[no-untyped-call]
+                bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            )
+            if bbox is not None
+            else page.rect
+        )
         pixmap = page.get_pixmap(
             dpi=self.config.ocr_dpi,
             colorspace=pymupdf.csRGB,
             alpha=False,
+            clip=clip,
         )
         image = pixmap.tobytes("png")  # type: ignore[no-untyped-call]
         command = [
@@ -125,6 +157,10 @@ class TesseractOCRProvider:
 
         blocks = _line_blocks(
             words,
+            region_width=float(clip.width),
+            region_height=float(clip.height),
+            origin_x=float(clip.x0),
+            origin_y=float(clip.y0),
             page_width=float(page.rect.width),
             page_height=float(page.rect.height),
             image_width=pixmap.width,
@@ -197,6 +233,10 @@ def _parse_tsv(content: str) -> tuple[_OCRWord, ...]:
 def _line_blocks(
     words: Sequence[_OCRWord],
     *,
+    region_width: float,
+    region_height: float,
+    origin_x: float,
+    origin_y: float,
     page_width: float,
     page_height: float,
     image_width: int,
@@ -211,8 +251,8 @@ def _line_blocks(
     for word in words:
         grouped[word.line_key].append(word)
 
-    scale_x = page_width / image_width
-    scale_y = page_height / image_height
+    scale_x = region_width / image_width
+    scale_y = region_height / image_height
     blocks: list[OCRBlock] = []
     for line_key, line_words in grouped.items():
         line_words.sort(key=lambda word: (word.word_number, word.left))
@@ -226,10 +266,10 @@ def _line_blocks(
             right = max(word.left + word.width for word in segment_words)
             bottom = max(word.top + word.height for word in segment_words)
             bbox = BoundingBox(
-                x0=max(0.0, min(page_width, left * scale_x)),
-                y0=max(0.0, min(page_height, top * scale_y)),
-                x1=max(0.0, min(page_width, right * scale_x)),
-                y1=max(0.0, min(page_height, bottom * scale_y)),
+                x0=max(0.0, min(page_width, origin_x + left * scale_x)),
+                y0=max(0.0, min(page_height, origin_y + top * scale_y)),
+                x1=max(0.0, min(page_width, origin_x + right * scale_x)),
+                y1=max(0.0, min(page_height, origin_y + bottom * scale_y)),
             )
             confidence = sum(word.confidence for word in segment_words) / len(segment_words)
             blocks.append(

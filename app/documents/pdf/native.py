@@ -12,9 +12,28 @@ import pymupdf
 from pydantic import JsonValue
 
 from app.documents.pdf.config import PDFParsingConfig
-from app.documents.pdf.errors import PDFOCRError, PDFPreflightCode, PDFPreflightError
-from app.documents.pdf.layout import PDFLayoutAnalyzer
+from app.documents.pdf.errors import (
+    PDFOCRError,
+    PDFPreflightCode,
+    PDFPreflightError,
+    PDFTableRecognitionError,
+    PDFVisionError,
+)
+from app.documents.pdf.fusion import BlockFusion
+from app.documents.pdf.layout.analyzer import PDFLayoutAnalyzer
+from app.documents.pdf.layout.detection import (
+    LayoutDetectionResult,
+    LayoutDetector,
+    LayoutRegion,
+    LayoutRegionType,
+    OpenCVLayoutDetector,
+)
 from app.documents.pdf.layout.tables import NativeTableExtraction, extract_native_tables
+from app.documents.pdf.layout.tsr import (
+    OpenCVTableStructureRecognizer,
+    ScannedTableResult,
+    TableStructureRecognizer,
+)
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -31,6 +50,7 @@ from app.documents.pdf.models import (
 from app.documents.pdf.ocr import OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidator
 from app.documents.pdf.quality import BBoxTuple, PageQuality, PageQualityDetector
+from app.documents.pdf.vision import DisabledVisionProvider, VisionProvider, VisionRegionResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,11 +77,21 @@ class _BlockCandidate:
     metadata: dict[str, JsonValue]
 
 
+@dataclass(frozen=True, slots=True)
+class _RoutedExtraction:
+    candidates: list[_BlockCandidate]
+    warnings: list[ParseWarning]
+    metadata: dict[str, JsonValue]
+
+
 class NativePDFParser:
     def __init__(
         self,
         config: PDFParsingConfig | None = None,
         ocr_provider: OCRProvider | None = None,
+        layout_detector: LayoutDetector | None = None,
+        table_recognizer: TableStructureRecognizer | None = None,
+        vision_provider: VisionProvider | None = None,
     ) -> None:
         self.config = config or PDFParsingConfig()
         self.preflight = PDFPreflightValidator(self.config)
@@ -70,6 +100,13 @@ class NativePDFParser:
         self.ocr_provider = (
             ocr_provider if ocr_provider is not None else TesseractOCRProvider(self.config)
         )
+        self.region_layout = layout_detector or OpenCVLayoutDetector(self.config)
+        self.table_recognizer = table_recognizer or OpenCVTableStructureRecognizer(
+            self.config,
+            self.ocr_provider,
+        )
+        self.vision_provider = vision_provider or DisabledVisionProvider()
+        self.fusion = BlockFusion(self.config)
 
     def parse(
         self,
@@ -125,6 +162,15 @@ class NativePDFParser:
                 "plain_text_sha256": sha256(text.encode("utf-8")).hexdigest(),
                 "plain_text_size_bytes": len(text.encode("utf-8")),
                 "source_pdf_metadata": result.metadata,
+                "page_types": [page.page_type.value for page in pages],
+                "page_routing": [
+                    {
+                        "page_number": page.page_number,
+                        "page_type": page.page_type.value,
+                        "route": _page_route(page),
+                    }
+                    for page in pages
+                ],
             },
         )
         return NativePDFDocument(
@@ -146,12 +192,6 @@ class NativePDFParser:
 
         native_text_candidates = self._text_candidates(layout.get("blocks", []), width, height)
         image_candidates = self._image_candidates(page, width, height)
-        table_extraction = (
-            extract_native_tables(page)
-            if self.config.layout_enabled and self.config.layout_detect_tables
-            else NativeTableExtraction(tables=())
-        )
-        table_candidates = _table_candidates(table_extraction)
         quality = self.quality.assess(
             text="\n".join(candidate.text or "" for candidate in native_text_candidates),
             page_width=width,
@@ -160,7 +200,6 @@ class NativePDFParser:
             image_bboxes=[_bbox_tuple(candidate.bbox) for candidate in image_candidates],
         )
 
-        candidates = [*native_text_candidates, *image_candidates, *table_candidates]
         warnings = list(
             _quality_warnings(
                 page_number,
@@ -168,75 +207,24 @@ class NativePDFParser:
                 include_ocr_required=not self.config.ocr_enabled,
             )
         )
-        ocr_metadata: dict[str, JsonValue] = {
-            "requested": quality.requires_ocr,
-            "enabled": self.config.ocr_enabled,
-            "applied": False,
-        }
-        if table_extraction.failed:
-            warnings.append(
-                ParseWarning(
-                    code="TABLE_DETECTION_FAILED",
-                    message="Native table detection failed; positioned text was retained",
-                    page_number=page_number,
-                )
+        if quality.page_type in {PDFPageType.SCANNED, PDFPageType.MIXED}:
+            routed = self._extract_scanned_or_mixed_page(
+                page,
+                page_number,
+                quality,
+                native_text_candidates,
             )
-        if quality.requires_ocr and self.config.ocr_enabled:
-            try:
-                ocr_result = self.ocr_provider.recognize_page(page, page_number)
-            except PDFOCRError as exc:
-                warnings.append(
-                    ParseWarning(
-                        code="OCR_FAILED",
-                        message="OCR fallback could not process this page",
-                        page_number=page_number,
-                        details={
-                            "error_code": exc.code.value,
-                            "provider": self.ocr_provider.name,
-                        },
-                    )
-                )
-                ocr_metadata.update(
-                    {
-                        "provider": self.ocr_provider.name,
-                        "error_code": exc.code.value,
-                    }
-                )
-            else:
-                ocr_metadata.update(_ocr_metadata(ocr_result))
-                if ocr_result.blocks:
-                    candidates = [
-                        *_ocr_candidates(ocr_result),
-                        *image_candidates,
-                        *table_candidates,
-                    ]
-                    ocr_metadata["applied"] = True
-                    ocr_metadata["native_text_blocks_replaced"] = len(native_text_candidates)
-                    warnings.append(
-                        ParseWarning(
-                            code="OCR_APPLIED",
-                            message="OCR fallback supplied positioned text for this page",
-                            severity=PDFWarningSeverity.INFO,
-                            page_number=page_number,
-                            details={
-                                "provider": ocr_result.provider,
-                                "block_count": len(ocr_result.blocks),
-                            },
-                        )
-                    )
-                else:
-                    warnings.append(
-                        ParseWarning(
-                            code="OCR_EMPTY_RESULT",
-                            message="OCR completed but found no text on this page",
-                            page_number=page_number,
-                            details={"provider": ocr_result.provider},
-                        )
-                    )
+        else:
+            routed = self._extract_native_page(
+                page,
+                page_number,
+                native_text_candidates,
+                image_candidates,
+            )
+        warnings.extend(routed.warnings)
+        routed.candidates.sort(key=lambda candidate: (candidate.bbox.y0, candidate.bbox.x0))
 
-        candidates.sort(key=lambda candidate: (candidate.bbox.y0, candidate.bbox.x0))
-
-        blocks = tuple(
+        provisional_blocks = tuple(
             BlockIR(
                 block_id=f"p{page_number}_b{index:04d}",
                 type=candidate.type,
@@ -249,7 +237,17 @@ class NativePDFParser:
                 table_markdown=candidate.table_markdown,
                 metadata=candidate.metadata,
             )
-            for index, candidate in enumerate(candidates, start=1)
+            for index, candidate in enumerate(routed.candidates, start=1)
+        )
+        fusion = self.fusion.fuse(provisional_blocks)
+        blocks = tuple(
+            block.model_copy(
+                update={
+                    "block_id": f"p{page_number}_b{index:04d}",
+                    "reading_order": index - 1,
+                }
+            )
+            for index, block in enumerate(fusion.blocks, start=1)
         )
         return PageIR(
             page_number=page_number,
@@ -261,14 +259,321 @@ class NativePDFParser:
             warnings=tuple(warnings),
             metadata={
                 "quality": quality.as_metadata(),
-                "ocr": ocr_metadata,
-                "table_detection": {
-                    "enabled": self.config.layout_enabled and self.config.layout_detect_tables,
-                    "table_count": len(table_extraction.tables),
-                    "failed": table_extraction.failed,
+                "routing": {
+                    "scope": "page",
+                    "page_type": quality.page_type.value,
+                    "route": (
+                        "layout_multimodal"
+                        if quality.page_type in {PDFPageType.SCANNED, PDFPageType.MIXED}
+                        else "native_pymupdf"
+                    ),
+                },
+                **routed.metadata,
+                "fusion": {
+                    "version": self.fusion.version,
+                    "duplicate_blocks_removed": fusion.duplicate_blocks_removed,
+                    "table_text_blocks_removed": fusion.table_text_blocks_removed,
+                    "conflicts_resolved": fusion.conflicts_resolved,
+                    "output_block_count": len(blocks),
                 },
             },
         )
+
+    def _extract_native_page(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        native_text_candidates: list[_BlockCandidate],
+        image_candidates: list[_BlockCandidate],
+    ) -> _RoutedExtraction:
+        table_extraction = (
+            extract_native_tables(page)
+            if self.config.layout_enabled and self.config.layout_detect_tables
+            else NativeTableExtraction(tables=())
+        )
+        warnings: list[ParseWarning] = []
+        if table_extraction.failed:
+            warnings.append(
+                ParseWarning(
+                    code="TABLE_DETECTION_FAILED",
+                    message="Native table detection failed; positioned text was retained",
+                    page_number=page_number,
+                )
+            )
+        return _RoutedExtraction(
+            candidates=[
+                *native_text_candidates,
+                *image_candidates,
+                *_table_candidates(table_extraction),
+            ],
+            warnings=warnings,
+            metadata={
+                "layout_detection": {"requested": False, "applied": False},
+                "ocr": {"requested": False, "enabled": self.config.ocr_enabled, "applied": False},
+                "table_detection": {
+                    "route": "native_find_tables",
+                    "enabled": self.config.layout_enabled and self.config.layout_detect_tables,
+                    "table_count": len(table_extraction.tables),
+                    "native_table_count": len(table_extraction.tables),
+                    "scanned_table_count": 0,
+                    "failed": table_extraction.failed,
+                },
+                "vision": {"requested": False, "enabled": self.config.vlm_enabled},
+            },
+        )
+
+    def _extract_scanned_or_mixed_page(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        quality: PageQuality,
+        native_text_candidates: list[_BlockCandidate],
+    ) -> _RoutedExtraction:
+        candidates = list(native_text_candidates)
+        warnings: list[ParseWarning] = []
+        layout_result: LayoutDetectionResult | None = None
+        layout_error: str | None = None
+        if self.config.layout_detection_enabled:
+            try:
+                layout_result = self.region_layout.detect(page, page_number)
+            except Exception as exc:
+                layout_error = type(exc).__name__
+                warnings.append(
+                    ParseWarning(
+                        code="LAYOUT_DETECTION_FAILED",
+                        message=(
+                            "Page layout detection failed; whole-page OCR fallback was attempted"
+                        ),
+                        page_number=page_number,
+                        details={"provider": self.region_layout.name, "error_type": layout_error},
+                    )
+                )
+
+        text_regions = 0
+        table_regions = 0
+        image_regions = 0
+        ocr_blocks = 0
+        scanned_tables = 0
+        vlm_applied = 0
+        vlm_failed = 0
+        regions = layout_result.regions if layout_result is not None else ()
+        for region in regions:
+            if region.type is LayoutRegionType.TEXT:
+                text_regions += 1
+                result = self._ocr_region(page, page_number, region, warnings)
+                if result is not None:
+                    region_candidates = _ocr_candidates(result, region)
+                    candidates.extend(region_candidates)
+                    ocr_blocks += len(region_candidates)
+            elif region.type is LayoutRegionType.TABLE:
+                table_regions += 1
+                table_result = self._recognize_scanned_table(page, page_number, region, warnings)
+                if table_result is not None:
+                    candidates.append(_scanned_table_candidate(table_result, region))
+                    scanned_tables += 1
+                else:
+                    result = self._ocr_region(page, page_number, region, warnings)
+                    if result is not None:
+                        region_candidates = _ocr_candidates(result, region)
+                        candidates.extend(region_candidates)
+                        ocr_blocks += len(region_candidates)
+            else:
+                image_regions += 1
+                vision_result = self._analyze_image_region(page, page_number, region, warnings)
+                if vision_result is not None:
+                    vlm_applied += 1
+                elif self.config.vlm_enabled:
+                    vlm_failed += 1
+                candidates.append(_image_region_candidate(region, vision_result))
+
+        full_page_fallback = layout_result is None or (
+            self.config.ocr_enabled
+            and not any(candidate.source is PDFBlockSource.OCR for candidate in candidates)
+        )
+        if full_page_fallback and self.config.ocr_enabled and not _ocr_is_unavailable(warnings):
+            fallback_result = self._ocr_page(page, page_number, warnings)
+            if fallback_result is not None:
+                fallback_candidates = _ocr_candidates(fallback_result)
+                candidates.extend(fallback_candidates)
+                ocr_blocks += len(fallback_candidates)
+
+        if layout_result is not None and layout_result.fallback_used:
+            warnings.append(
+                ParseWarning(
+                    code="LAYOUT_DETECTION_FALLBACK",
+                    message=(
+                        "No reliable regions were detected; the page was routed as one text region"
+                    ),
+                    severity=PDFWarningSeverity.INFO,
+                    page_number=page_number,
+                    details={"provider": layout_result.provider},
+                )
+            )
+        if ocr_blocks:
+            warnings.append(
+                ParseWarning(
+                    code="OCR_APPLIED",
+                    message="OCR supplied positioned text for page-level layout regions",
+                    severity=PDFWarningSeverity.INFO,
+                    page_number=page_number,
+                    details={"provider": self.ocr_provider.name, "block_count": ocr_blocks},
+                )
+            )
+        elif self.config.ocr_enabled and not any(
+            warning.code in {"OCR_REGION_FAILED", "OCR_FAILED"} for warning in warnings
+        ):
+            warnings.append(
+                ParseWarning(
+                    code="OCR_EMPTY_RESULT",
+                    message="OCR completed but found no text on this page",
+                    page_number=page_number,
+                    details={"provider": self.ocr_provider.name},
+                )
+            )
+
+        return _RoutedExtraction(
+            candidates=candidates,
+            warnings=warnings,
+            metadata={
+                "layout_detection": {
+                    "requested": True,
+                    "enabled": self.config.layout_detection_enabled,
+                    "applied": layout_result is not None,
+                    "provider": layout_result.provider
+                    if layout_result
+                    else self.region_layout.name,
+                    "error_type": layout_error,
+                    "region_count": len(regions),
+                    "text_region_count": text_regions,
+                    "table_region_count": table_regions,
+                    "image_region_count": image_regions,
+                    "fallback_used": layout_result.fallback_used if layout_result else True,
+                },
+                "ocr": {
+                    "requested": quality.requires_ocr or quality.page_type is PDFPageType.MIXED,
+                    "enabled": self.config.ocr_enabled,
+                    "applied": ocr_blocks > 0,
+                    "provider": self.ocr_provider.name,
+                    "region_block_count": ocr_blocks,
+                    "whole_page_fallback": full_page_fallback,
+                },
+                "table_detection": {
+                    "route": "layout_tsr_cell_ocr",
+                    "enabled": self.config.tsr_enabled,
+                    "native_table_count": 0,
+                    "scanned_table_count": scanned_tables,
+                    "detected_table_region_count": table_regions,
+                },
+                "vision": {
+                    "requested": image_regions > 0,
+                    "enabled": self.config.vlm_enabled,
+                    "provider": self.vision_provider.name,
+                    "image_region_count": image_regions,
+                    "applied_count": vlm_applied,
+                    "failed_count": vlm_failed,
+                },
+            },
+        )
+
+    def _ocr_region(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        region: LayoutRegion,
+        warnings: list[ParseWarning],
+    ) -> OCRPageResult | None:
+        if not self.config.ocr_enabled:
+            return None
+        if _ocr_is_unavailable(warnings):
+            return None
+        try:
+            recognize_region = getattr(self.ocr_provider, "recognize_region", None)
+            if callable(recognize_region):
+                return cast(OCRPageResult, recognize_region(page, page_number, region.bbox))
+            return self.ocr_provider.recognize_page(page, page_number)
+        except PDFOCRError as exc:
+            warnings.append(
+                ParseWarning(
+                    code="OCR_REGION_FAILED",
+                    message="OCR could not process a detected page region",
+                    page_number=page_number,
+                    details={
+                        "region_id": region.region_id,
+                        "error_code": exc.code.value,
+                        "provider": self.ocr_provider.name,
+                    },
+                )
+            )
+            return None
+
+    def _ocr_page(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        warnings: list[ParseWarning],
+    ) -> OCRPageResult | None:
+        try:
+            return self.ocr_provider.recognize_page(page, page_number)
+        except PDFOCRError as exc:
+            warnings.append(
+                ParseWarning(
+                    code="OCR_FAILED",
+                    message="Whole-page OCR fallback could not process this page",
+                    page_number=page_number,
+                    details={"error_code": exc.code.value, "provider": self.ocr_provider.name},
+                )
+            )
+            return None
+
+    def _recognize_scanned_table(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        region: LayoutRegion,
+        warnings: list[ParseWarning],
+    ) -> ScannedTableResult | None:
+        if not self.config.tsr_enabled or not self.config.ocr_enabled:
+            return None
+        try:
+            return self.table_recognizer.recognize(page, page_number, region.bbox)
+        except (PDFTableRecognitionError, PDFOCRError) as exc:
+            warnings.append(
+                ParseWarning(
+                    code="TSR_FAILED",
+                    message=(
+                        "Scanned table reconstruction failed; region OCR fallback was attempted"
+                    ),
+                    page_number=page_number,
+                    details={
+                        "region_id": region.region_id,
+                        "provider": self.table_recognizer.name,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+            )
+            return None
+
+    def _analyze_image_region(
+        self,
+        page: pymupdf.Page,
+        page_number: int,
+        region: LayoutRegion,
+        warnings: list[ParseWarning],
+    ) -> VisionRegionResult | None:
+        if not self.config.vlm_enabled:
+            return None
+        try:
+            return self.vision_provider.analyze_region(page, page_number, region.bbox)
+        except PDFVisionError:
+            warnings.append(
+                ParseWarning(
+                    code="VLM_REGION_FAILED",
+                    message="VLM could not analyze a detected image region",
+                    page_number=page_number,
+                    details={"region_id": region.region_id, "provider": self.vision_provider.name},
+                )
+            )
+            return None
 
     @staticmethod
     def _text_candidates(
@@ -419,7 +724,10 @@ def _quality_warnings(
     return tuple(warnings)
 
 
-def _ocr_candidates(result: OCRPageResult) -> list[_BlockCandidate]:
+def _ocr_candidates(
+    result: OCRPageResult,
+    region: LayoutRegion | None = None,
+) -> list[_BlockCandidate]:
     return [
         _BlockCandidate(
             bbox=block.bbox,
@@ -429,7 +737,17 @@ def _ocr_candidates(result: OCRPageResult) -> list[_BlockCandidate]:
             source=PDFBlockSource.OCR,
             confidence=block.confidence,
             table_markdown=None,
-            metadata=block.metadata,
+            metadata={
+                **block.metadata,
+                **(
+                    {
+                        "layout_region_id": region.region_id,
+                        "layout_region_type": region.type.value,
+                    }
+                    if region is not None
+                    else {"ocr_scope": "whole_page"}
+                ),
+            },
         )
         for block in result.blocks
     ]
@@ -444,6 +762,14 @@ def _ocr_metadata(result: OCRPageResult) -> dict[str, JsonValue]:
         "rendered_height": result.rendered_height,
         "block_count": len(result.blocks),
     }
+
+
+def _ocr_is_unavailable(warnings: list[ParseWarning]) -> bool:
+    return any(
+        warning.code in {"OCR_REGION_FAILED", "OCR_FAILED"}
+        and warning.details.get("error_code") == "PDF_OCR_UNAVAILABLE"
+        for warning in warnings
+    )
 
 
 def _table_candidates(extraction: NativeTableExtraction) -> list[_BlockCandidate]:
@@ -462,6 +788,59 @@ def _table_candidates(extraction: NativeTableExtraction) -> list[_BlockCandidate
     ]
 
 
+def _scanned_table_candidate(
+    result: ScannedTableResult,
+    region: LayoutRegion,
+) -> _BlockCandidate:
+    return _BlockCandidate(
+        bbox=result.bbox,
+        type=PDFBlockType.TABLE,
+        text=None,
+        raw_text=None,
+        source=PDFBlockSource.DERIVED,
+        confidence=region.confidence,
+        table_markdown=result.markdown,
+        metadata={
+            **result.metadata,
+            "layout_region_id": region.region_id,
+            "layout_region_type": region.type.value,
+            "tsr_provider": result.provider,
+        },
+    )
+
+
+def _image_region_candidate(
+    region: LayoutRegion,
+    vision: VisionRegionResult | None,
+) -> _BlockCandidate:
+    metadata: dict[str, JsonValue] = {
+        **region.metadata,
+        "layout_region_id": region.region_id,
+        "layout_region_type": region.type.value,
+    }
+    text: str | None = None
+    if vision is not None:
+        text = vision.caption
+        metadata.update(
+            {
+                **vision.metadata,
+                "vision_provider": vision.provider,
+                "vision_model": vision.model,
+                "visible_text": vision.visible_text,
+            }
+        )
+    return _BlockCandidate(
+        bbox=region.bbox,
+        type=PDFBlockType.IMAGE,
+        text=text,
+        raw_text=vision.visible_text if vision is not None else None,
+        source=PDFBlockSource.DERIVED,
+        confidence=region.confidence,
+        table_markdown=None,
+        metadata=metadata,
+    )
+
+
 def _plain_text(pages: tuple[PageIR, ...]) -> str:
     sections: list[str] = []
     for page in pages:
@@ -477,6 +856,11 @@ def _plain_text(pages: tuple[PageIR, ...]) -> str:
         if text:
             sections.append(f"--- Page {page.page_number} ---\n{text}")
     return "\n\n".join(sections)
+
+
+def _page_route(page: PageIR) -> JsonValue:
+    routing = page.metadata.get("routing")
+    return routing.get("route") if isinstance(routing, dict) else None
 
 
 def _document_type(pages: tuple[PageIR, ...]) -> PDFDocumentType:

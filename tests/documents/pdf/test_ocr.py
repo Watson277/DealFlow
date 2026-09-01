@@ -110,6 +110,34 @@ def test_tesseract_provider_maps_pixels_to_pdf_coordinates(monkeypatch: pytest.M
     document.close()
 
 
+def test_tesseract_provider_maps_region_pixels_to_page_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tsv = "\n".join(
+        [
+            "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+            "5\t1\t1\t1\t1\t1\t0\t0\t100\t50\t90.0\tregion",
+        ]
+    )
+    monkeypatch.setattr(ocr_module.shutil, "which", lambda _: "/usr/bin/tesseract")
+    monkeypatch.setattr(
+        ocr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, tsv.encode(), b""),
+    )
+    document = pymupdf.open()
+    page = document.new_page(width=200, height=300)
+    bbox = BoundingBox(x0=50, y0=75, x1=150, y1=225)
+
+    result = TesseractOCRProvider(PDFParsingConfig(ocr_dpi=250)).recognize_region(page, 1, bbox)
+
+    document.close()
+    assert result.blocks[0].bbox.x0 == pytest.approx(50)
+    assert result.blocks[0].bbox.y0 == pytest.approx(75)
+    assert 50 < result.blocks[0].bbox.x1 <= 150
+    assert 75 < result.blocks[0].bbox.y1 <= 225
+
+
 def test_tesseract_provider_reports_missing_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ocr_module.shutil, "which", lambda _: None)
     document = pymupdf.open()
@@ -160,8 +188,9 @@ def test_parser_retains_native_page_and_stable_warning_when_ocr_fails() -> None:
 
     page = parsed.pages[0]
     assert not [block for block in page.blocks if block.source is PDFBlockSource.OCR]
-    assert [warning.code for warning in page.warnings] == ["OCR_FAILED"]
+    assert [warning.code for warning in page.warnings] == ["OCR_REGION_FAILED"]
     assert page.warnings[0].details == {
+        "region_id": "p1_r0001",
         "error_code": "PDF_OCR_UNAVAILABLE",
         "provider": "missing-ocr",
     }

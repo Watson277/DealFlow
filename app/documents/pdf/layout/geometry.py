@@ -21,6 +21,12 @@ def intersection_area(first: BoundingBox, second: BoundingBox) -> float:
     return overlap_width * overlap_height
 
 
+def intersection_over_union(first: BoundingBox, second: BoundingBox) -> float:
+    intersection = intersection_area(first, second)
+    union_area = area(first) + area(second) - intersection
+    return intersection / union_area if union_area > 0 else 0.0
+
+
 def smaller_box_overlap(first: BoundingBox, second: BoundingBox) -> float:
     smaller_area = min(area(first), area(second))
     if smaller_area <= 0:

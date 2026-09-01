@@ -6,8 +6,21 @@ from app.documents.pdf.errors import (
     PDFOCRErrorCode,
     PDFPreflightCode,
     PDFPreflightError,
+    PDFTableRecognitionError,
+    PDFVisionError,
 )
-from app.documents.pdf.layout import PDFLayoutAnalyzer
+from app.documents.pdf.fusion import BlockFusion, BlockFusionResult
+from app.documents.pdf.layout import (
+    LayoutDetectionResult,
+    LayoutDetector,
+    LayoutRegion,
+    LayoutRegionType,
+    OpenCVLayoutDetector,
+    OpenCVTableStructureRecognizer,
+    ScannedTableResult,
+    TableStructureRecognizer,
+)
+from app.documents.pdf.layout.analyzer import PDFLayoutAnalyzer
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -31,15 +44,27 @@ from app.documents.pdf.serialization import (
     document_ir_object_key,
     serialize_document_ir,
 )
+from app.documents.pdf.vision import (
+    DisabledVisionProvider,
+    OpenAICompatibleVisionProvider,
+    VisionProvider,
+    VisionRegionResult,
+)
 
 __all__ = [
     "BlockIR",
+    "BlockFusion",
+    "BlockFusionResult",
     "BoundingBox",
     "DocumentIR",
     "DOCUMENT_IR_CONTENT_TYPE",
     "DOCUMENT_IR_FILENAME",
     "NativePDFDocument",
     "NativePDFParser",
+    "LayoutDetectionResult",
+    "LayoutDetector",
+    "LayoutRegion",
+    "LayoutRegionType",
     "OCRBlock",
     "OCRPageResult",
     "OCRProvider",
@@ -49,6 +74,8 @@ __all__ = [
     "PDFPageType",
     "PDFOCRError",
     "PDFOCRErrorCode",
+    "PDFTableRecognitionError",
+    "PDFVisionError",
     "PDFParseStatus",
     "PDFLayoutAnalyzer",
     "PDFParsingConfig",
@@ -60,7 +87,15 @@ __all__ = [
     "PageQuality",
     "PageQualityDetector",
     "ParseWarning",
+    "OpenCVLayoutDetector",
+    "OpenCVTableStructureRecognizer",
+    "OpenAICompatibleVisionProvider",
+    "DisabledVisionProvider",
+    "ScannedTableResult",
+    "TableStructureRecognizer",
     "TesseractOCRProvider",
+    "VisionProvider",
+    "VisionRegionResult",
     "document_ir_object_key",
     "serialize_document_ir",
 ]

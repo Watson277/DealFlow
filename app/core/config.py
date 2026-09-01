@@ -57,7 +57,11 @@ class Settings(BaseSettings):
     )
 
     max_rfp_upload_size_bytes: int = 50 * 1024 * 1024
-    pdf_parser_version: str = Field(default="native-ocr-layout-1.0", min_length=1, max_length=64)
+    pdf_parser_version: str = Field(
+        default="page-routing-layout-2.0",
+        min_length=1,
+        max_length=64,
+    )
     pdf_max_pages: int = Field(default=500, ge=1, le=10_000)
     pdf_text_min_effective_chars: int = Field(default=20, ge=1)
     pdf_text_max_garbled_ratio: float = Field(default=0.10, ge=0.0, le=1.0)
@@ -76,6 +80,20 @@ class Settings(BaseSettings):
     pdf_layout_column_gap_ratio: float = Field(default=0.06, gt=0.0, lt=1.0)
     pdf_layout_paragraph_gap_multiplier: float = Field(default=1.40, gt=0.0, le=5.0)
     pdf_layout_title_font_ratio: float = Field(default=1.25, gt=1.0, le=5.0)
+    pdf_layout_detection_enabled: bool = True
+    pdf_layout_detection_dpi: int = Field(default=250, ge=72, le=600)
+    pdf_layout_min_region_area_ratio: float = Field(default=0.001, gt=0.0, lt=1.0)
+    pdf_tsr_enabled: bool = True
+    pdf_tsr_max_cells: int = Field(default=200, ge=1, le=5_000)
+    pdf_vlm_enabled: bool = False
+    pdf_vlm_model: str | None = None
+    pdf_vlm_base_url: str | None = None
+    pdf_vlm_api_key: SecretStr | None = None
+    pdf_vlm_timeout_seconds: float = Field(default=60.0, gt=0.0, le=600.0)
+    pdf_vlm_max_tokens: int = Field(default=512, ge=64, le=8_192)
+    pdf_fusion_iou_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    pdf_fusion_text_similarity_threshold: float = Field(default=0.88, ge=0.0, le=1.0)
+    pdf_fusion_table_text_overlap_threshold: float = Field(default=0.50, ge=0.0, le=1.0)
     rfp_lock_ttl_seconds: int = 300
     rfp_lock_acquire_timeout_seconds: float = 10.0
 

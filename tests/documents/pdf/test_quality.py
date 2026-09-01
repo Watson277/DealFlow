@@ -41,7 +41,7 @@ def test_quality_classifies_scanned_and_empty_pages() -> None:
     assert empty.requires_ocr is False
 
 
-def test_quality_classifies_mixed_page_without_forcing_ocr() -> None:
+def test_quality_routes_mixed_page_through_region_extraction() -> None:
     quality = assess(
         "Native text remains useful alongside a large architecture diagram.",
         text_bboxes=[(10, 10, 90, 30)],
@@ -49,7 +49,7 @@ def test_quality_classifies_mixed_page_without_forcing_ocr() -> None:
     )
 
     assert quality.page_type is PDFPageType.MIXED
-    assert quality.requires_ocr is False
+    assert quality.requires_ocr is True
 
 
 def test_quality_routes_sparse_or_garbled_content_to_ocr() -> None:

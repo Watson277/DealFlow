@@ -96,6 +96,15 @@ def test_pdf_config_loads_from_application_settings() -> None:
         pdf_layout_column_gap_ratio=0.08,
         pdf_layout_paragraph_gap_multiplier=1.2,
         pdf_layout_title_font_ratio=1.4,
+        pdf_layout_detection_enabled=False,
+        pdf_layout_detection_dpi=200,
+        pdf_layout_min_region_area_ratio=0.002,
+        pdf_tsr_enabled=False,
+        pdf_tsr_max_cells=50,
+        pdf_vlm_enabled=True,
+        pdf_fusion_iou_threshold=0.6,
+        pdf_fusion_text_similarity_threshold=0.9,
+        pdf_fusion_table_text_overlap_threshold=0.55,
     )
 
     config = PDFParsingConfig.from_settings(settings)
@@ -120,6 +129,15 @@ def test_pdf_config_loads_from_application_settings() -> None:
         layout_column_gap_ratio=0.08,
         layout_paragraph_gap_multiplier=1.2,
         layout_title_font_ratio=1.4,
+        layout_detection_enabled=False,
+        layout_detection_dpi=200,
+        layout_min_region_area_ratio=0.002,
+        tsr_enabled=False,
+        tsr_max_cells=50,
+        vlm_enabled=True,
+        fusion_iou_threshold=0.6,
+        fusion_text_similarity_threshold=0.9,
+        fusion_table_text_overlap_threshold=0.55,
     )
 
 

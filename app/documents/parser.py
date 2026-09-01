@@ -14,6 +14,13 @@ from app.documents.pdf import (
     OCRProvider,
     PDFParsingConfig,
 )
+from app.documents.pdf.layout.detection import LayoutDetector
+from app.documents.pdf.layout.tsr import TableStructureRecognizer
+from app.documents.pdf.vision import (
+    DisabledVisionProvider,
+    OpenAICompatibleVisionProvider,
+    VisionProvider,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,12 +36,29 @@ class DocumentParser:
         self,
         pdf_config: PDFParsingConfig | None = None,
         pdf_ocr_provider: OCRProvider | None = None,
+        pdf_layout_detector: LayoutDetector | None = None,
+        pdf_table_recognizer: TableStructureRecognizer | None = None,
+        pdf_vision_provider: VisionProvider | None = None,
     ) -> None:
-        self.pdf_parser = NativePDFParser(pdf_config, pdf_ocr_provider)
+        self.pdf_parser = NativePDFParser(
+            pdf_config,
+            pdf_ocr_provider,
+            pdf_layout_detector,
+            pdf_table_recognizer,
+            pdf_vision_provider,
+        )
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "DocumentParser":
-        return cls(PDFParsingConfig.from_settings(settings))
+        vision_provider: VisionProvider = (
+            OpenAICompatibleVisionProvider(settings)
+            if settings.pdf_vlm_enabled
+            else DisabledVisionProvider()
+        )
+        return cls(
+            PDFParsingConfig.from_settings(settings),
+            pdf_vision_provider=vision_provider,
+        )
 
     def parse(
         self,

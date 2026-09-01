@@ -10,11 +10,10 @@ from collections import Counter
 from pydantic import JsonValue
 
 from app.documents.pdf.config import PDFParsingConfig
+from app.documents.pdf.fusion import BlockFusion
 from app.documents.pdf.layout.geometry import (
-    first_box_overlap,
     height,
     horizontal_overlap_ratio,
-    smaller_box_overlap,
     union,
     width,
 )
@@ -39,6 +38,7 @@ class PDFLayoutAnalyzer:
 
     def __init__(self, config: PDFParsingConfig) -> None:
         self.config = config
+        self.fusion = BlockFusion(config)
 
     def analyze(self, pages: tuple[PageIR, ...]) -> tuple[PageIR, ...]:
         if not self.config.layout_enabled:
@@ -52,8 +52,8 @@ class PDFLayoutAnalyzer:
         repeated_keys: frozenset[str],
     ) -> PageIR:
         input_count = len(page.blocks)
-        blocks, duplicate_count = _remove_duplicates(list(page.blocks))
-        blocks, table_text_count = _remove_text_inside_tables(blocks)
+        fusion = self.fusion.fuse(page.blocks)
+        blocks = list(fusion.blocks)
         context = build_context(blocks, repeated_region_keys=repeated_keys)
         blocks = [
             classify_text_block(
@@ -79,8 +79,10 @@ class PDFLayoutAnalyzer:
             "column_count": column_count,
             "input_block_count": input_count,
             "output_block_count": len(finalized),
-            "duplicate_blocks_removed": duplicate_count,
-            "table_text_blocks_removed": table_text_count,
+            "fusion_version": self.fusion.version,
+            "duplicate_blocks_removed": fusion.duplicate_blocks_removed,
+            "table_text_blocks_removed": fusion.table_text_blocks_removed,
+            "fusion_conflicts_resolved": fusion.conflicts_resolved,
             "paragraph_blocks_merged": merged_count,
             "title_blocks_merged": merged_title_count,
             "semantic_counts": semantic_counts(finalized),
@@ -110,44 +112,6 @@ class PDFLayoutAnalyzer:
             math.ceil(len(pages) * self.config.layout_repeated_region_min_fraction),
         )
         return frozenset(key for key, count in occurrences.items() if count >= minimum)
-
-
-def _remove_duplicates(blocks: list[BlockIR]) -> tuple[list[BlockIR], int]:
-    retained: list[BlockIR] = []
-    removed = 0
-    for block in blocks:
-        normalized = _normalized_block_text(block)
-        duplicate_index: int | None = None
-        if normalized:
-            for index, existing in enumerate(retained):
-                if _normalized_block_text(existing) != normalized:
-                    continue
-                if smaller_box_overlap(block.bbox, existing.bbox) >= 0.85:
-                    duplicate_index = index
-                    break
-        if duplicate_index is None:
-            retained.append(block)
-            continue
-        removed += 1
-        if _block_preference(block) > _block_preference(retained[duplicate_index]):
-            retained[duplicate_index] = block
-    return retained, removed
-
-
-def _remove_text_inside_tables(blocks: list[BlockIR]) -> tuple[list[BlockIR], int]:
-    tables = [block for block in blocks if block.type is PDFBlockType.TABLE]
-    if not tables:
-        return blocks, 0
-    retained: list[BlockIR] = []
-    removed = 0
-    for block in blocks:
-        if block.type is PDFBlockType.TEXT and any(
-            first_box_overlap(block.bbox, table.bbox) >= 0.50 for table in tables
-        ):
-            removed += 1
-            continue
-        retained.append(block)
-    return retained, removed
 
 
 def _assign_columns(
@@ -450,19 +414,6 @@ def _groups_have_vertical_overlap(left: list[BlockIR], right: list[BlockIR]) -> 
     overlap = max(0.0, min(left_range[1], right_range[1]) - max(left_range[0], right_range[0]))
     smaller_height = min(left_range[1] - left_range[0], right_range[1] - right_range[0])
     return smaller_height > 0 and overlap / smaller_height >= 0.20
-
-
-def _normalized_block_text(block: BlockIR) -> str:
-    return re.sub(r"\s+", " ", (block.text or "").casefold()).strip()
-
-
-def _block_preference(block: BlockIR) -> tuple[int, float]:
-    source_rank = {
-        PDFBlockSource.NATIVE: 3,
-        PDFBlockSource.OCR: 2,
-        PDFBlockSource.DERIVED: 1,
-    }[block.source]
-    return source_rank, block.confidence or 0.0
 
 
 def _column_index(block: BlockIR) -> int:

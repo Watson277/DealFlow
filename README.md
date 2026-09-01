@@ -65,18 +65,18 @@ PDF 进入后续工作流前会先完成文件预检，拒绝损坏、加密、�
 并按页计算有效字符数、乱码率以及文本/图片覆盖率，得到 `text`、`scanned`、`mixed` 或
 `empty` 页面类型。结构化结果通过 `ParsedDocument.pdf` 提供，原有带页码标记的纯文本输出保持兼容。
 
-对质量检测判定为 `scanned` 或原生文本不足的 `mixed` 页面，解析器会以配置的 DPI 渲染页面，
-调用 Tesseract 识别中英文字，并将 TSV 中的文字、置信度与像素坐标映射回 PDF bbox。成功的
-OCR 行以 `source=ocr` 写入 `BlockIR`；失败时保留原生结果并写入稳定的 `OCR_FAILED` 告警，
-不会把命令输出或本地路径写入业务文本。OCR Provider 可替换，相关开关、语言、DPI、超时及
-页面分割模式均可通过 `.env` 中的 `PDF_OCR_*` 配置调整。
+路由粒度严格是单页。`text` 页使用 PyMuPDF 原生文字、图片与 `find_tables`；`scanned` 和
+`mixed` 页先渲染，再通过 OpenCV Layout Detection 划分文字区、表格区和图片区。文字区调用
+Tesseract 区域 OCR，表格区使用网格 TSR 后逐单元格 OCR，图片区可选择调用兼容
+Chat Completions 的 VLM。VLM 默认关闭，只有显式设置 `PDF_VLM_ENABLED=true` 才会把检测出的
+图片裁剪发送到外部模型。相关参数位于 `.env` 的 `PDF_LAYOUT_DETECTION_*`、`PDF_OCR_*`、
+`PDF_TSR_*` 和 `PDF_VLM_*`。
 
-原生提取或 OCR 完成后，共享版面分析器会清理重叠文本、合并连续段落、检测双栏并恢复阅读
-顺序，再按多页重复位置、字体、粗体、编号和几何关系标记 `title`、`list`、`header`、
-`footer`、`footnote` 和 `caption`。原生矢量/文本表格通过 PyMuPDF 恢复为带 bbox 的
-`table_markdown`，表格内重复文本会被移除，题注会关联目标图片或表格。页眉页脚保留在
-`PageIR` 中，但不进入兼容纯文本；扫描表格目前保留 OCR 文本和坐标，不猜测不存在的行列。
-版面规则可通过 `.env` 中的 `PDF_LAYOUT_*` 配置调整。
+多通道结果先经过 Block Fusion，再生成 `PageIR`：通过 bbox、IoU 与文本相似度消除 Native/OCR
+重复，表格结构覆盖表格区域内的普通文字，冲突时优先保留 `native text > OCR`。之后共享版面
+分析器恢复多栏阅读顺序，并标记 `title`、`list`、`header`、`footer`、`footnote` 与
+`caption`。全部页面处理完成后，才汇总 `page_types[]` 得到 `DocumentIR.document_type`；每页实际
+路由和融合统计也会写入 IR metadata，便于排障和追溯。
 
 ## 删除客户、知识库与任务
 

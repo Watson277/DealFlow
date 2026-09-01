@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class PDFParsingConfig:
-    parser_version: str = "native-ocr-layout-1.0"
+    parser_version: str = "page-routing-layout-2.0"
     max_pages: int = 500
     min_effective_chars: int = 20
     max_garbled_ratio: float = 0.10
@@ -30,6 +30,15 @@ class PDFParsingConfig:
     layout_column_gap_ratio: float = 0.06
     layout_paragraph_gap_multiplier: float = 1.40
     layout_title_font_ratio: float = 1.25
+    layout_detection_enabled: bool = True
+    layout_detection_dpi: int = 250
+    layout_min_region_area_ratio: float = 0.001
+    tsr_enabled: bool = True
+    tsr_max_cells: int = 200
+    vlm_enabled: bool = False
+    fusion_iou_threshold: float = 0.55
+    fusion_text_similarity_threshold: float = 0.88
+    fusion_table_text_overlap_threshold: float = 0.50
 
     def __post_init__(self) -> None:
         if not self.parser_version.strip():
@@ -70,6 +79,19 @@ class PDFParsingConfig:
             raise ValueError("layout_paragraph_gap_multiplier must be positive")
         if self.layout_title_font_ratio <= 1:
             raise ValueError("layout_title_font_ratio must be greater than one")
+        if not 72 <= self.layout_detection_dpi <= 600:
+            raise ValueError("layout_detection_dpi must be between 72 and 600")
+        if not 0.0 < self.layout_min_region_area_ratio < 1.0:
+            raise ValueError("layout_min_region_area_ratio must be between zero and one")
+        if self.tsr_max_cells < 1:
+            raise ValueError("tsr_max_cells must be positive")
+        for name, value in (
+            ("fusion_iou_threshold", self.fusion_iou_threshold),
+            ("fusion_text_similarity_threshold", self.fusion_text_similarity_threshold),
+            ("fusion_table_text_overlap_threshold", self.fusion_table_text_overlap_threshold),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be between zero and one")
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Self:
@@ -93,4 +115,13 @@ class PDFParsingConfig:
             layout_column_gap_ratio=settings.pdf_layout_column_gap_ratio,
             layout_paragraph_gap_multiplier=settings.pdf_layout_paragraph_gap_multiplier,
             layout_title_font_ratio=settings.pdf_layout_title_font_ratio,
+            layout_detection_enabled=settings.pdf_layout_detection_enabled,
+            layout_detection_dpi=settings.pdf_layout_detection_dpi,
+            layout_min_region_area_ratio=settings.pdf_layout_min_region_area_ratio,
+            tsr_enabled=settings.pdf_tsr_enabled,
+            tsr_max_cells=settings.pdf_tsr_max_cells,
+            vlm_enabled=settings.pdf_vlm_enabled,
+            fusion_iou_threshold=settings.pdf_fusion_iou_threshold,
+            fusion_text_similarity_threshold=settings.pdf_fusion_text_similarity_threshold,
+            fusion_table_text_overlap_threshold=settings.pdf_fusion_table_text_overlap_threshold,
         )
