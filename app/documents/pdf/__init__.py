@@ -7,6 +7,7 @@ from app.documents.pdf.errors import (
     PDFPreflightCode,
     PDFPreflightError,
 )
+from app.documents.pdf.layout import PDFLayoutAnalyzer
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -41,6 +42,7 @@ __all__ = [
     "PDFOCRError",
     "PDFOCRErrorCode",
     "PDFParseStatus",
+    "PDFLayoutAnalyzer",
     "PDFParsingConfig",
     "PDFPreflightCode",
     "PDFPreflightError",

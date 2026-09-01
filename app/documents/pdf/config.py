@@ -1,4 +1,4 @@
-"""Configuration for native PDF inspection, extraction, and OCR fallback."""
+"""Configuration for native PDF extraction, OCR, and layout analysis."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class PDFParsingConfig:
-    parser_version: str = "native-ocr-1.0"
+    parser_version: str = "native-ocr-layout-1.0"
     max_pages: int = 500
     min_effective_chars: int = 20
     max_garbled_ratio: float = 0.10
@@ -23,6 +23,13 @@ class PDFParsingConfig:
     ocr_timeout_seconds: float = 120.0
     ocr_executable: str = "tesseract"
     ocr_page_segmentation_mode: int = 3
+    layout_enabled: bool = True
+    layout_detect_tables: bool = True
+    layout_header_footer_margin_ratio: float = 0.12
+    layout_repeated_region_min_fraction: float = 0.60
+    layout_column_gap_ratio: float = 0.06
+    layout_paragraph_gap_multiplier: float = 1.40
+    layout_title_font_ratio: float = 1.25
 
     def __post_init__(self) -> None:
         if not self.parser_version.strip():
@@ -50,6 +57,19 @@ class PDFParsingConfig:
             raise ValueError("ocr_executable must not be blank")
         if not 0 <= self.ocr_page_segmentation_mode <= 13:
             raise ValueError("ocr_page_segmentation_mode must be between 0 and 13")
+        for name, value in (
+            ("layout_header_footer_margin_ratio", self.layout_header_footer_margin_ratio),
+            ("layout_repeated_region_min_fraction", self.layout_repeated_region_min_fraction),
+            ("layout_column_gap_ratio", self.layout_column_gap_ratio),
+        ):
+            if not 0.0 < value < 1.0:
+                raise ValueError(f"{name} must be between zero and one")
+        if self.layout_header_footer_margin_ratio >= 0.5:
+            raise ValueError("layout_header_footer_margin_ratio must be less than 0.5")
+        if self.layout_paragraph_gap_multiplier <= 0:
+            raise ValueError("layout_paragraph_gap_multiplier must be positive")
+        if self.layout_title_font_ratio <= 1:
+            raise ValueError("layout_title_font_ratio must be greater than one")
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Self:
@@ -66,4 +86,11 @@ class PDFParsingConfig:
             ocr_timeout_seconds=settings.pdf_ocr_timeout_seconds,
             ocr_executable=settings.pdf_ocr_executable,
             ocr_page_segmentation_mode=settings.pdf_ocr_page_segmentation_mode,
+            layout_enabled=settings.pdf_layout_enabled,
+            layout_detect_tables=settings.pdf_layout_detect_tables,
+            layout_header_footer_margin_ratio=settings.pdf_layout_header_footer_margin_ratio,
+            layout_repeated_region_min_fraction=settings.pdf_layout_repeated_region_min_fraction,
+            layout_column_gap_ratio=settings.pdf_layout_column_gap_ratio,
+            layout_paragraph_gap_multiplier=settings.pdf_layout_paragraph_gap_multiplier,
+            layout_title_font_ratio=settings.pdf_layout_title_font_ratio,
         )

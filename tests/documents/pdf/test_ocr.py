@@ -122,6 +122,36 @@ def test_tesseract_provider_reports_missing_runtime(monkeypatch: pytest.MonkeyPa
     assert captured.value.code is PDFOCRErrorCode.UNAVAILABLE
 
 
+def test_tesseract_provider_splits_one_ocr_line_at_a_column_gutter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tsv = "\n".join(
+        [
+            "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+            "5\t1\t1\t1\t1\t1\t100\t200\t120\t40\t96.0\tLeft",
+            "5\t1\t1\t1\t1\t2\t235\t200\t180\t40\t94.0\trequirement",
+            "5\t1\t1\t1\t1\t3\t1250\t200\t130\t40\t95.0\tRight",
+            "5\t1\t1\t1\t1\t4\t1395\t200\t150\t40\t93.0\tevidence",
+        ]
+    )
+    monkeypatch.setattr(ocr_module.shutil, "which", lambda _: "/usr/bin/tesseract")
+    monkeypatch.setattr(
+        ocr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, tsv.encode(), b""),
+    )
+    document = pymupdf.open()
+    page = document.new_page(width=600, height=500)
+
+    result = TesseractOCRProvider(PDFParsingConfig(ocr_dpi=250)).recognize_page(page, 1)
+
+    document.close()
+    assert [block.text for block in result.blocks] == ["Left requirement", "Right evidence"]
+    assert result.blocks[0].metadata["ocr_line_segment"] == 1
+    assert result.blocks[1].metadata["ocr_line_segment"] == 2
+    assert result.blocks[0].bbox.x1 < result.blocks[1].bbox.x0
+
+
 def test_parser_retains_native_page_and_stable_warning_when_ocr_fails() -> None:
     parsed = NativePDFParser(PDFParsingConfig(), UnavailableOCRProvider()).parse(
         scanned_pdf_bytes(),

@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     )
 
     max_rfp_upload_size_bytes: int = 50 * 1024 * 1024
-    pdf_parser_version: str = Field(default="native-ocr-1.0", min_length=1, max_length=64)
+    pdf_parser_version: str = Field(default="native-ocr-layout-1.0", min_length=1, max_length=64)
     pdf_max_pages: int = Field(default=500, ge=1, le=10_000)
     pdf_text_min_effective_chars: int = Field(default=20, ge=1)
     pdf_text_max_garbled_ratio: float = Field(default=0.10, ge=0.0, le=1.0)
@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     pdf_ocr_timeout_seconds: float = Field(default=120.0, gt=0.0, le=600.0)
     pdf_ocr_executable: str = Field(default="tesseract", min_length=1, max_length=512)
     pdf_ocr_page_segmentation_mode: int = Field(default=3, ge=0, le=13)
+    pdf_layout_enabled: bool = True
+    pdf_layout_detect_tables: bool = True
+    pdf_layout_header_footer_margin_ratio: float = Field(default=0.12, gt=0.0, lt=0.5)
+    pdf_layout_repeated_region_min_fraction: float = Field(default=0.60, gt=0.0, le=1.0)
+    pdf_layout_column_gap_ratio: float = Field(default=0.06, gt=0.0, lt=1.0)
+    pdf_layout_paragraph_gap_multiplier: float = Field(default=1.40, gt=0.0, le=5.0)
+    pdf_layout_title_font_ratio: float = Field(default=1.25, gt=1.0, le=5.0)
     rfp_lock_ttl_seconds: int = 300
     rfp_lock_acquire_timeout_seconds: float = 10.0
 

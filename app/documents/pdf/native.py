@@ -11,6 +11,8 @@ from pydantic import JsonValue
 
 from app.documents.pdf.config import PDFParsingConfig
 from app.documents.pdf.errors import PDFOCRError, PDFPreflightCode, PDFPreflightError
+from app.documents.pdf.layout import PDFLayoutAnalyzer
+from app.documents.pdf.layout.tables import NativeTableExtraction, extract_native_tables
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -46,6 +48,7 @@ class _BlockCandidate:
     raw_text: str | None
     source: PDFBlockSource
     confidence: float | None
+    table_markdown: str | None
     metadata: dict[str, JsonValue]
 
 
@@ -58,6 +61,7 @@ class NativePDFParser:
         self.config = config or PDFParsingConfig()
         self.preflight = PDFPreflightValidator(self.config)
         self.quality = PageQualityDetector(self.config)
+        self.layout = PDFLayoutAnalyzer(self.config)
         self.ocr_provider = (
             ocr_provider if ocr_provider is not None else TesseractOCRProvider(self.config)
         )
@@ -76,10 +80,11 @@ class NativePDFParser:
                 filename=filename,
                 file_size_bytes=len(content),
             )
-            pages = tuple(
+            extracted_pages = tuple(
                 self._extract_page(_load_page(document, index), index + 1)
                 for index in range(document.page_count)
             )
+            pages = self.layout.analyze(extracted_pages)
 
         warnings = tuple(warning for page in pages for warning in page.warnings)
         return NativePDFDocument(
@@ -100,6 +105,12 @@ class NativePDFParser:
 
         native_text_candidates = self._text_candidates(layout.get("blocks", []), width, height)
         image_candidates = self._image_candidates(page, width, height)
+        table_extraction = (
+            extract_native_tables(page)
+            if self.config.layout_enabled and self.config.layout_detect_tables
+            else NativeTableExtraction(tables=())
+        )
+        table_candidates = _table_candidates(table_extraction)
         quality = self.quality.assess(
             text="\n".join(candidate.text or "" for candidate in native_text_candidates),
             page_width=width,
@@ -108,7 +119,7 @@ class NativePDFParser:
             image_bboxes=[_bbox_tuple(candidate.bbox) for candidate in image_candidates],
         )
 
-        candidates = [*native_text_candidates, *image_candidates]
+        candidates = [*native_text_candidates, *image_candidates, *table_candidates]
         warnings = list(
             _quality_warnings(
                 page_number,
@@ -121,6 +132,14 @@ class NativePDFParser:
             "enabled": self.config.ocr_enabled,
             "applied": False,
         }
+        if table_extraction.failed:
+            warnings.append(
+                ParseWarning(
+                    code="TABLE_DETECTION_FAILED",
+                    message="Native table detection failed; positioned text was retained",
+                    page_number=page_number,
+                )
+            )
         if quality.requires_ocr and self.config.ocr_enabled:
             try:
                 ocr_result = self.ocr_provider.recognize_page(page, page_number)
@@ -145,7 +164,11 @@ class NativePDFParser:
             else:
                 ocr_metadata.update(_ocr_metadata(ocr_result))
                 if ocr_result.blocks:
-                    candidates = [*_ocr_candidates(ocr_result), *image_candidates]
+                    candidates = [
+                        *_ocr_candidates(ocr_result),
+                        *image_candidates,
+                        *table_candidates,
+                    ]
                     ocr_metadata["applied"] = True
                     ocr_metadata["native_text_blocks_replaced"] = len(native_text_candidates)
                     warnings.append(
@@ -182,6 +205,7 @@ class NativePDFParser:
                 text=candidate.text,
                 raw_text=candidate.raw_text,
                 confidence=candidate.confidence,
+                table_markdown=candidate.table_markdown,
                 metadata=candidate.metadata,
             )
             for index, candidate in enumerate(candidates, start=1)
@@ -194,7 +218,15 @@ class NativePDFParser:
             confidence=quality.confidence,
             blocks=blocks,
             warnings=tuple(warnings),
-            metadata={"quality": quality.as_metadata(), "ocr": ocr_metadata},
+            metadata={
+                "quality": quality.as_metadata(),
+                "ocr": ocr_metadata,
+                "table_detection": {
+                    "enabled": self.config.layout_enabled and self.config.layout_detect_tables,
+                    "table_count": len(table_extraction.tables),
+                    "failed": table_extraction.failed,
+                },
+            },
         )
 
     @staticmethod
@@ -238,6 +270,7 @@ class NativePDFParser:
                     raw_text=text,
                     source=PDFBlockSource.NATIVE,
                     confidence=None,
+                    table_markdown=None,
                     metadata={
                         "native_block_number": int(raw_block.get("number", len(candidates))),
                         "span_count": span_count,
@@ -245,6 +278,7 @@ class NativePDFParser:
                         "font_sizes": cast(
                             JsonValue, sorted(size for size in font_sizes if size > 0)
                         ),
+                        "is_bold": any("bold" in name.casefold() for name in font_names),
                     },
                 )
             )
@@ -275,6 +309,7 @@ class NativePDFParser:
                     raw_text=None,
                     source=PDFBlockSource.NATIVE,
                     confidence=None,
+                    table_markdown=None,
                     metadata=metadata,
                 )
             )
@@ -352,6 +387,7 @@ def _ocr_candidates(result: OCRPageResult) -> list[_BlockCandidate]:
             raw_text=block.text,
             source=PDFBlockSource.OCR,
             confidence=block.confidence,
+            table_markdown=None,
             metadata=block.metadata,
         )
         for block in result.blocks
@@ -369,10 +405,34 @@ def _ocr_metadata(result: OCRPageResult) -> dict[str, JsonValue]:
     }
 
 
+def _table_candidates(extraction: NativeTableExtraction) -> list[_BlockCandidate]:
+    return [
+        _BlockCandidate(
+            bbox=table.bbox,
+            type=PDFBlockType.TABLE,
+            text=None,
+            raw_text=None,
+            source=PDFBlockSource.DERIVED,
+            confidence=None,
+            table_markdown=table.markdown,
+            metadata=table.metadata,
+        )
+        for table in extraction.tables
+    ]
+
+
 def _plain_text(pages: tuple[PageIR, ...]) -> str:
     sections: list[str] = []
     for page in pages:
-        text = "\n\n".join(block.text for block in page.blocks if block.text)
+        content: list[str] = []
+        for block in page.blocks:
+            if block.type in {PDFBlockType.HEADER, PDFBlockType.FOOTER}:
+                continue
+            if block.table_markdown:
+                content.append(block.table_markdown)
+            elif block.text:
+                content.append(block.text)
+        text = "\n\n".join(content)
         if text:
             sections.append(f"--- Page {page.page_number} ---\n{text}")
     return "\n\n".join(sections)

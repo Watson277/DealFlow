@@ -89,6 +89,13 @@ def test_pdf_config_loads_from_application_settings() -> None:
         pdf_ocr_timeout_seconds=45,
         pdf_ocr_executable="custom-tesseract",
         pdf_ocr_page_segmentation_mode=6,
+        pdf_layout_enabled=False,
+        pdf_layout_detect_tables=False,
+        pdf_layout_header_footer_margin_ratio=0.1,
+        pdf_layout_repeated_region_min_fraction=0.75,
+        pdf_layout_column_gap_ratio=0.08,
+        pdf_layout_paragraph_gap_multiplier=1.2,
+        pdf_layout_title_font_ratio=1.4,
     )
 
     config = PDFParsingConfig.from_settings(settings)
@@ -106,6 +113,13 @@ def test_pdf_config_loads_from_application_settings() -> None:
         ocr_timeout_seconds=45,
         ocr_executable="custom-tesseract",
         ocr_page_segmentation_mode=6,
+        layout_enabled=False,
+        layout_detect_tables=False,
+        layout_header_footer_margin_ratio=0.1,
+        layout_repeated_region_min_fraction=0.75,
+        layout_column_gap_ratio=0.08,
+        layout_paragraph_gap_multiplier=1.2,
+        layout_title_font_ratio=1.4,
     )
 
 

@@ -32,7 +32,7 @@ def test_native_parser_extracts_text_image_layout_and_bboxes() -> None:
 
     assert parsed.document_type is PDFDocumentType.TEXT_BASED
     assert parsed.page_count == 1
-    assert parsed.parser_version == "native-ocr-1.0"
+    assert parsed.parser_version == "native-ocr-layout-1.0"
     assert "--- Page 1 ---" in parsed.text
     assert "DealFlow native requirement" in parsed.text
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import shutil
+import statistics
 import subprocess
 import unicodedata
 from collections import defaultdict
@@ -215,36 +216,56 @@ def _line_blocks(
     blocks: list[OCRBlock] = []
     for line_key, line_words in grouped.items():
         line_words.sort(key=lambda word: (word.word_number, word.left))
-        text = _join_words([word.text for word in line_words])
-        if not text:
-            continue
-        left = min(word.left for word in line_words)
-        top = min(word.top for word in line_words)
-        right = max(word.left + word.width for word in line_words)
-        bottom = max(word.top + word.height for word in line_words)
-        bbox = BoundingBox(
-            x0=max(0.0, min(page_width, left * scale_x)),
-            y0=max(0.0, min(page_height, top * scale_y)),
-            x1=max(0.0, min(page_width, right * scale_x)),
-            y1=max(0.0, min(page_height, bottom * scale_y)),
-        )
-        confidence = sum(word.confidence for word in line_words) / len(line_words)
-        blocks.append(
-            OCRBlock(
-                text=text,
-                bbox=bbox,
-                confidence=round(confidence, 6),
-                metadata={
-                    "ocr_provider": provider,
-                    "ocr_languages": languages,
-                    "ocr_dpi": dpi,
-                    "ocr_line": list(line_key),
-                    "ocr_word_count": len(line_words),
-                },
+        segments = _split_line_at_large_gaps(line_words, image_width)
+        for segment_number, segment_words in enumerate(segments, start=1):
+            text = _join_words([word.text for word in segment_words])
+            if not text:
+                continue
+            left = min(word.left for word in segment_words)
+            top = min(word.top for word in segment_words)
+            right = max(word.left + word.width for word in segment_words)
+            bottom = max(word.top + word.height for word in segment_words)
+            bbox = BoundingBox(
+                x0=max(0.0, min(page_width, left * scale_x)),
+                y0=max(0.0, min(page_height, top * scale_y)),
+                x1=max(0.0, min(page_width, right * scale_x)),
+                y1=max(0.0, min(page_height, bottom * scale_y)),
             )
-        )
+            confidence = sum(word.confidence for word in segment_words) / len(segment_words)
+            blocks.append(
+                OCRBlock(
+                    text=text,
+                    bbox=bbox,
+                    confidence=round(confidence, 6),
+                    metadata={
+                        "ocr_provider": provider,
+                        "ocr_languages": languages,
+                        "ocr_dpi": dpi,
+                        "ocr_line": list(line_key),
+                        "ocr_line_segment": segment_number,
+                        "ocr_word_count": len(segment_words),
+                    },
+                )
+            )
     blocks.sort(key=lambda block: (block.bbox.y0, block.bbox.x0))
     return tuple(blocks)
+
+
+def _split_line_at_large_gaps(
+    words: Sequence[_OCRWord],
+    image_width: int,
+) -> tuple[tuple[_OCRWord, ...], ...]:
+    if len(words) < 2:
+        return (tuple(words),)
+    typical_height = statistics.median(word.height for word in words)
+    gap_threshold = max(typical_height * 3.0, image_width * 0.04)
+    segments: list[list[_OCRWord]] = [[words[0]]]
+    for previous, current in zip(words, words[1:], strict=False):
+        gap = current.left - (previous.left + previous.width)
+        if gap > gap_threshold:
+            segments.append([])
+        segments[-1].append(current)
+    return tuple(tuple(segment) for segment in segments if segment)
 
 
 def _join_words(words: Sequence[str]) -> str:
