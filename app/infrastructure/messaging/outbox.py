@@ -3,10 +3,10 @@ from typing import Any, Literal, TypeAlias
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.models import OutboxEvent
 from app.models.mixins import utc_now
 from app.repositories.outbox import OutboxEventRepository
-from app.services.kafka import KafkaProducerService
 
 logger = structlog.get_logger(__name__)
 EventDeliveryStatus: TypeAlias = Literal["PENDING", "PUBLISHED", "FAILED"]

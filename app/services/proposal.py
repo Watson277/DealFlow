@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ProposalNotFoundError, RFPNotFoundError
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import Proposal
 from app.repositories import ProposalRepository, RFPRepository
-from app.services.storage import ObjectStorageService
 
 
 class ProposalService:

@@ -9,6 +9,9 @@ from app.agents.proposal_generator import ProposalContext, ProposalGenerator
 from app.core.config import Settings
 from app.core.exceptions import ProposalGenerationError
 from app.db.session import async_session_factory
+from app.infrastructure.locking.redis import DistributedLockService
+from app.infrastructure.messaging.outbox import OutboxPublisher
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import RFP, CapabilityResult, Customer, OutboxEvent, Proposal, WorkflowRun
 from app.models.enums import OutboxStatus, ProposalStatus, RFPStatus, WorkflowStatus
 from app.models.mixins import generate_uuid, utc_now
@@ -22,10 +25,7 @@ from app.repositories import (
 )
 from app.schemas.events import CapabilitiesEvaluatedEvent
 from app.schemas.proposal import ProposalDraft
-from app.services.lock import DistributedLockService
-from app.services.outbox import OutboxPublisher
 from app.services.proposal_renderer import ProposalMarkdownRenderer
-from app.services.storage import ObjectStorageService
 
 logger = structlog.get_logger(__name__)
 

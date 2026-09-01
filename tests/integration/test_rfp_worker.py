@@ -9,12 +9,12 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.db.session import async_session_factory, engine
+from app.infrastructure.messaging.kafka import get_kafka_service
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.main import app
 from app.models import RFP, Customer, Document, OutboxEvent, Requirement, WorkflowRun
 from app.models.enums import DocumentStatus, OutboxStatus, RFPStatus, WorkflowStatus
 from app.schemas.requirement import ExtractedRequirement
-from app.services.kafka import get_kafka_service
-from app.services.storage import ObjectStorageService
 from app.workers.requirement_worker import RequirementWorker
 from app.workers.rfp_worker import RFPWorker
 

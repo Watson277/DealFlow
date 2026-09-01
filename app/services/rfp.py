@@ -15,6 +15,8 @@ from app.core.exceptions import (
     RFPNotFoundError,
     RFPRetryConflictError,
 )
+from app.infrastructure.messaging.outbox import EventDeliveryStatus, OutboxPublisher
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import RFP, Document, OutboxEvent, WorkflowRun
 from app.models.enums import (
     DocumentStatus,
@@ -34,8 +36,6 @@ from app.repositories import (
     RFPRepository,
     WorkflowRunRepository,
 )
-from app.services.outbox import EventDeliveryStatus, OutboxPublisher
-from app.services.storage import ObjectStorageService
 
 logger = structlog.get_logger(__name__)
 

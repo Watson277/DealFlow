@@ -17,6 +17,8 @@ from app.agents.capability_judge import CapabilityRequirement
 from app.agents.proposal_generator import ProposalContext
 from app.core.config import get_settings
 from app.db.session import async_session_factory, engine
+from app.infrastructure.messaging.kafka import KafkaProducerService
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.main import app
 from app.models import (
     RFP,
@@ -43,9 +45,7 @@ from app.rag.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 from app.schemas.capability import CapabilityJudgment
 from app.schemas.proposal import ProposalDraft, ProposalRequirementResponse
 from app.services.document_parser import DocumentParser
-from app.services.kafka import KafkaProducerService
 from app.services.knowledge import KnowledgeService
-from app.services.storage import ObjectStorageService
 from app.workers.capability_worker import CapabilityWorker
 from app.workers.proposal_worker import ProposalWorker
 

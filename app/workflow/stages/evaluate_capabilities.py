@@ -12,6 +12,8 @@ from app.agents.capability_judge import (
 from app.core.config import Settings
 from app.core.exceptions import CapabilityEvaluationError
 from app.db.session import async_session_factory
+from app.infrastructure.locking.redis import DistributedLockService
+from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.models import (
     RFP,
     CapabilityEvidence,
@@ -35,8 +37,6 @@ from app.repositories import (
 )
 from app.schemas.capability import CapabilityJudgment
 from app.schemas.events import RequirementsExtractedEvent
-from app.services.lock import DistributedLockService
-from app.services.outbox import OutboxPublisher
 
 logger = structlog.get_logger(__name__)
 

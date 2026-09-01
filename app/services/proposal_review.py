@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.exceptions import ProposalNotFoundError, ProposalReviewConflictError
+from app.infrastructure.messaging.outbox import OutboxPublisher
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import OutboxEvent, Proposal, ProposalReview
 from app.models.enums import (
     OutboxStatus,
@@ -23,8 +25,6 @@ from app.repositories import (
     WorkflowRunRepository,
 )
 from app.schemas.proposal import ProposalReviewCreate
-from app.services.outbox import OutboxPublisher
-from app.services.storage import ObjectStorageService
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,7 +9,7 @@ from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.session import close_database
-from app.services.kafka import get_kafka_service
+from app.infrastructure.messaging.kafka import get_kafka_service
 
 
 @asynccontextmanager

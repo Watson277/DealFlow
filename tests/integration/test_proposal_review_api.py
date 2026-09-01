@@ -7,6 +7,8 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.db.session import async_session_factory, engine
+from app.infrastructure.messaging.kafka import get_kafka_service
+from app.infrastructure.storage.minio import ObjectStorageService
 from app.main import app
 from app.models import RFP, Customer, OutboxEvent, Proposal, ProposalReview, WorkflowRun
 from app.models.enums import (
@@ -16,8 +18,6 @@ from app.models.enums import (
     WorkflowRunType,
     WorkflowStatus,
 )
-from app.services.kafka import get_kafka_service
-from app.services.storage import ObjectStorageService
 
 pytestmark = [
     pytest.mark.integration,
