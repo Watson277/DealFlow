@@ -29,15 +29,15 @@ from app.schemas.events import (
     RFPUploadedEvent,
 )
 from app.schemas.requirement import ExtractedRequirement
-from app.services.capability_processing import CapabilityProcessingService
 from app.services.customer import CustomerService
 from app.services.knowledge import KnowledgeService
-from app.services.proposal_processing import ProposalProcessingService
-from app.services.requirement_processing import RequirementProcessingService
 from app.services.rfp import CreateRFPCommand, RFPService
-from app.services.rfp_processing import RFPProcessingService
 from app.services.storage import StoredObject
 from app.services.structured_chat import StructuredChatClient
+from app.workflow.stages.evaluate_capabilities import CapabilityProcessingService
+from app.workflow.stages.extract_requirements import RequirementProcessingService
+from app.workflow.stages.generate_proposal import ProposalProcessingService
+from app.workflow.stages.parse_rfp import RFPProcessingService
 
 
 def deletion_app(state, vector_store=None):
@@ -262,7 +262,9 @@ async def test_requirement_retry_resumes_and_duplicate_delivery_is_idempotent(
     async with state.factory() as session:
         result = await service(state, session).retry(state.rfp_id)
     event = RFPCompletedEvent.model_validate(result.event.payload)
-    monkeypatch.setattr("app.services.requirement_processing.async_session_factory", state.factory)
+    monkeypatch.setattr(
+        "app.workflow.stages.extract_requirements.async_session_factory", state.factory
+    )
     extractor = SimpleNamespace(
         extract=AsyncMock(
             return_value=[
@@ -304,7 +306,9 @@ async def test_schema_repair_only_persists_validated_requirements(
     async with state.factory() as session:
         result = await service(state, session).retry(state.rfp_id)
     event = RFPCompletedEvent.model_validate(result.event.payload)
-    monkeypatch.setattr("app.services.requirement_processing.async_session_factory", state.factory)
+    monkeypatch.setattr(
+        "app.workflow.stages.extract_requirements.async_session_factory", state.factory
+    )
     calls = 0
 
     def handle(request):
@@ -550,7 +554,9 @@ async def test_delete_during_extraction_drops_late_results_and_failures(
     async with state.factory() as session:
         result = await service(state, session).retry(state.rfp_id)
     event = RFPCompletedEvent.model_validate(result.event.payload)
-    monkeypatch.setattr("app.services.requirement_processing.async_session_factory", state.factory)
+    monkeypatch.setattr(
+        "app.workflow.stages.extract_requirements.async_session_factory", state.factory
+    )
 
     async def extract(*args, **kwargs):
         async with state.factory() as delete_session:

@@ -15,10 +15,10 @@ from app.db.session import close_database
 from app.rag.embedding import EmbeddingService, OpenAIEmbeddingService
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.schemas.events import RequirementsExtractedEvent
-from app.services.capability_processing import CapabilityProcessingService
 from app.services.kafka import KafkaProducerService
 from app.services.lock import DistributedLockService
 from app.services.outbox import OutboxPublisher
+from app.workflow.stages.evaluate_capabilities import CapabilityProcessingService
 
 logger = structlog.get_logger(__name__)
 

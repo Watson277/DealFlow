@@ -9,7 +9,7 @@ from app.core.exceptions import KnowledgeIndexError
 from app.models.enums import CapabilityStatus
 from app.rag.chunking import KnowledgeChunk, KnowledgeChunker
 from app.rag.vector_store import QdrantKnowledgeStore
-from app.services.capability_processing import CapabilityProcessingService
+from app.workflow.stages.evaluate_capabilities import CapabilityProcessingService
 
 
 def test_knowledge_chunker_preserves_pdf_pages() -> None:

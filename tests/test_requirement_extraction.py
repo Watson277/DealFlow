@@ -5,7 +5,7 @@ from app.agents.requirement_extractor import OpenAIRequirementExtractor
 from app.core.config import Settings
 from app.core.exceptions import LLMConfigurationError, RequirementExtractionError
 from app.schemas.requirement import ExtractedRequirement
-from app.services.requirement_processing import RequirementProcessingService
+from app.workflow.stages.extract_requirements import RequirementProcessingService
 
 
 def test_openai_extractor_requires_api_key() -> None:

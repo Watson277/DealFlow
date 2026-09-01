@@ -1,1 +1,1 @@
-"""LangGraph workflows."""
+"""Event-driven workflow orchestration and processing stages."""

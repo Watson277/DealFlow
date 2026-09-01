@@ -16,8 +16,8 @@ from app.services.document_parser import DocumentParser
 from app.services.kafka import KafkaProducerService
 from app.services.lock import DistributedLockService
 from app.services.outbox import OutboxPublisher
-from app.services.rfp_processing import RFPProcessingService
 from app.services.storage import ObjectStorageService
+from app.workflow.stages.parse_rfp import RFPProcessingService
 
 logger = structlog.get_logger(__name__)
 

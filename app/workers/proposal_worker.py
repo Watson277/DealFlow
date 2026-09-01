@@ -16,9 +16,9 @@ from app.schemas.events import CapabilitiesEvaluatedEvent
 from app.services.kafka import KafkaProducerService
 from app.services.lock import DistributedLockService
 from app.services.outbox import OutboxPublisher
-from app.services.proposal_processing import ProposalProcessingService
 from app.services.proposal_renderer import ProposalMarkdownRenderer
 from app.services.storage import ObjectStorageService
+from app.workflow.stages.generate_proposal import ProposalProcessingService
 
 logger = structlog.get_logger(__name__)
 
