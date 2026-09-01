@@ -22,6 +22,8 @@ from app.models import (
 )
 from app.models.enums import CapabilityStatus, OutboxStatus, RFPStatus, WorkflowStatus
 from app.models.mixins import generate_uuid, utc_now
+from app.rag.embedding import EmbeddingService
+from app.rag.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 from app.repositories import (
     CapabilityEvidenceRepository,
     CapabilityResultRepository,
@@ -33,10 +35,8 @@ from app.repositories import (
 )
 from app.schemas.capability import CapabilityJudgment
 from app.schemas.events import RequirementsExtractedEvent
-from app.services.embedding import EmbeddingService
 from app.services.lock import DistributedLockService
 from app.services.outbox import OutboxPublisher
-from app.services.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 
 logger = structlog.get_logger(__name__)
 

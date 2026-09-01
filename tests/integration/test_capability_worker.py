@@ -38,13 +38,14 @@ from app.models.enums import (
     WorkflowRunType,
     WorkflowStatus,
 )
+from app.rag.chunking import KnowledgeChunker
+from app.rag.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 from app.schemas.capability import CapabilityJudgment
 from app.schemas.proposal import ProposalDraft, ProposalRequirementResponse
 from app.services.document_parser import DocumentParser
 from app.services.kafka import KafkaProducerService
 from app.services.knowledge import KnowledgeService
 from app.services.storage import ObjectStorageService
-from app.services.vector_store import KnowledgeChunker, QdrantKnowledgeStore, RetrievedEvidence
 from app.workers.capability_worker import CapabilityWorker
 from app.workers.proposal_worker import ProposalWorker
 

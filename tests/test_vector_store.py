@@ -7,8 +7,9 @@ from qdrant_client import AsyncQdrantClient
 from app.core.config import Settings
 from app.core.exceptions import KnowledgeIndexError
 from app.models.enums import CapabilityStatus
+from app.rag.chunking import KnowledgeChunk, KnowledgeChunker
+from app.rag.vector_store import QdrantKnowledgeStore
 from app.services.capability_processing import CapabilityProcessingService
-from app.services.vector_store import KnowledgeChunk, KnowledgeChunker, QdrantKnowledgeStore
 
 
 def test_knowledge_chunker_preserves_pdf_pages() -> None:
@@ -55,7 +56,7 @@ async def test_delete_vectors_targets_only_document_in_original_collection(
         delete=AsyncMock(),
         close=AsyncMock(),
     )
-    monkeypatch.setattr("app.services.vector_store.AsyncQdrantClient", lambda **kwargs: client)
+    monkeypatch.setattr("app.rag.vector_store.AsyncQdrantClient", lambda **kwargs: client)
     store = QdrantKnowledgeStore(Settings(_env_file=None, qdrant_collection="new-collection"))
     await store.delete_document("document-to-delete", collection_name="original-collection")
     client.collection_exists.assert_awaited_once_with("original-collection")
@@ -73,7 +74,7 @@ async def test_delete_vectors_targets_only_document_in_original_collection(
 
 async def test_deleted_document_disappears_from_vector_search_without_affecting_others(monkeypatch):
     client = AsyncQdrantClient(":memory:")
-    monkeypatch.setattr("app.services.vector_store.AsyncQdrantClient", lambda **kwargs: client)
+    monkeypatch.setattr("app.rag.vector_store.AsyncQdrantClient", lambda **kwargs: client)
     store = QdrantKnowledgeStore(Settings(_env_file=None, qdrant_score_threshold=None))
     try:
         for document_id in ["delete-me", "keep-me"]:

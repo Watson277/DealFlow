@@ -4,9 +4,9 @@ from typing import Protocol
 
 from app.core.config import Settings
 from app.core.exceptions import CapabilityEvaluationError
+from app.rag.vector_store import RetrievedEvidence
 from app.schemas.capability import CapabilityJudgment
 from app.services.structured_chat import StructuredChatClient, llm_error_summary
-from app.services.vector_store import RetrievedEvidence
 
 CAPABILITY_INSTRUCTIONS = """
 You are the Capability Agent for an enterprise proposal system.

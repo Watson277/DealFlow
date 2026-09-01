@@ -5,10 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.rag.chunking import KnowledgeChunker
+from app.rag.embedding import OpenAIEmbeddingService
+from app.rag.vector_store import QdrantKnowledgeStore
 from app.services.capability import CapabilityService
 from app.services.customer import CustomerService
 from app.services.document_parser import DocumentParser
-from app.services.embedding import OpenAIEmbeddingService
 from app.services.kafka import KafkaProducerService, get_kafka_service
 from app.services.knowledge import KnowledgeService
 from app.services.outbox import OutboxPublisher
@@ -17,7 +19,6 @@ from app.services.proposal_review import ProposalReviewService
 from app.services.requirement import RequirementService
 from app.services.rfp import RFPService
 from app.services.storage import ObjectStorageService, get_object_storage_service
-from app.services.vector_store import KnowledgeChunker, QdrantKnowledgeStore
 
 
 def get_customer_service(

@@ -12,13 +12,13 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import LockNotAcquiredError
 from app.core.logging import configure_logging
 from app.db.session import close_database
+from app.rag.embedding import EmbeddingService, OpenAIEmbeddingService
+from app.rag.vector_store import QdrantKnowledgeStore
 from app.schemas.events import RequirementsExtractedEvent
 from app.services.capability_processing import CapabilityProcessingService
-from app.services.embedding import EmbeddingService, OpenAIEmbeddingService
 from app.services.kafka import KafkaProducerService
 from app.services.lock import DistributedLockService
 from app.services.outbox import OutboxPublisher
-from app.services.vector_store import QdrantKnowledgeStore
 
 logger = structlog.get_logger(__name__)
 

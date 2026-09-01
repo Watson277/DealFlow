@@ -9,11 +9,12 @@ from app.core.exceptions import DeletionConflictError, KnowledgeIndexError, Know
 from app.models import Document
 from app.models.enums import DocumentStatus, DocumentType
 from app.models.mixins import generate_uuid, utc_now
+from app.rag.chunking import KnowledgeChunker
+from app.rag.embedding import EmbeddingService
+from app.rag.vector_store import QdrantKnowledgeStore
 from app.repositories import DocumentRepository
 from app.services.document_parser import DocumentParser
-from app.services.embedding import EmbeddingService
 from app.services.storage import ObjectStorageService
-from app.services.vector_store import KnowledgeChunker, QdrantKnowledgeStore
 
 
 @dataclass(frozen=True, slots=True)
