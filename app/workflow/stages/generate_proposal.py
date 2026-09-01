@@ -15,6 +15,7 @@ from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import RFP, CapabilityResult, Customer, OutboxEvent, Proposal, WorkflowRun
 from app.models.enums import OutboxStatus, ProposalStatus, RFPStatus, WorkflowStatus
 from app.models.mixins import generate_uuid, utc_now
+from app.proposals.markdown_renderer import ProposalMarkdownRenderer
 from app.repositories import (
     CapabilityResultRepository,
     CustomerRepository,
@@ -25,7 +26,6 @@ from app.repositories import (
 )
 from app.schemas.events import CapabilitiesEvaluatedEvent
 from app.schemas.proposal import ProposalDraft
-from app.services.proposal_renderer import ProposalMarkdownRenderer
 
 logger = structlog.get_logger(__name__)
 

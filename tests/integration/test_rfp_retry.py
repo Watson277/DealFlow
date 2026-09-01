@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.core.exceptions import CustomerNotFoundError, DealFlowError, RFPRetryConflictError
 from app.db.session import get_db_session
 from app.infrastructure.storage.minio import StoredObject
+from app.llm.structured_chat import StructuredChatClient
 from app.main import create_app
 from app.models import RFP, Customer, Document, OutboxEvent, Proposal, Requirement, WorkflowRun
 from app.models.mixins import utc_now
@@ -33,7 +34,6 @@ from app.schemas.requirement import ExtractedRequirement
 from app.services.customer import CustomerService
 from app.services.knowledge import KnowledgeService
 from app.services.rfp import CreateRFPCommand, RFPService
-from app.services.structured_chat import StructuredChatClient
 from app.workflow.stages.evaluate_capabilities import CapabilityProcessingService
 from app.workflow.stages.extract_requirements import RequirementProcessingService
 from app.workflow.stages.generate_proposal import ProposalProcessingService

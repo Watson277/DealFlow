@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.documents.parser import DocumentParser
 from app.infrastructure.messaging.kafka import KafkaProducerService, get_kafka_service
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.minio import ObjectStorageService, get_object_storage_service
@@ -13,7 +14,6 @@ from app.rag.embedding import OpenAIEmbeddingService
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.services.capability import CapabilityService
 from app.services.customer import CustomerService
-from app.services.document_parser import DocumentParser
 from app.services.knowledge import KnowledgeService
 from app.services.proposal import ProposalService
 from app.services.proposal_review import ProposalReviewService

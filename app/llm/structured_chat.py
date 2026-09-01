@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.core.exceptions import LLMConfigurationError
-from app.services.llm_validation import validation_details
+from app.llm.validation import validation_details
 
 StructuredModelT = TypeVar("StructuredModelT", bound=BaseModel)
 logger = structlog.get_logger(__name__)

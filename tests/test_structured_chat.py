@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 from structlog.testing import capture_logs
 
 from app.core.config import Settings
-from app.services.structured_chat import StructuredChatClient
+from app.llm.structured_chat import StructuredChatClient
 
 
 class StructuredOutput(BaseModel):
@@ -21,7 +21,7 @@ async def test_timeout_is_retried_and_logged_without_sensitive_details(monkeypat
     def handle(request):
         raise httpx.ReadTimeout("PRIVATE-NETWORK-CONTEXT", request=request)
 
-    monkeypatch.setattr("app.services.structured_chat.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("app.llm.structured_chat.asyncio.sleep", AsyncMock())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
         sdk = AsyncOpenAI(api_key="test", http_client=http_client)
         chat = StructuredChatClient(Settings(_env_file=None, llm_max_retries=1), sdk)
@@ -106,7 +106,7 @@ async def test_explicit_retry_limit_and_safe_failure_logs(monkeypatch, status_co
             json={"error": {"message": "PRIVATE-PROVIDER-BODY", "type": "provider_error"}},
         )
 
-    monkeypatch.setattr("app.services.structured_chat.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("app.llm.structured_chat.asyncio.sleep", AsyncMock())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
         sdk = AsyncOpenAI(api_key="private-key", http_client=http_client)
         chat = StructuredChatClient(Settings(_env_file=None, llm_max_retries=2), sdk)

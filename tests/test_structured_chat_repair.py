@@ -8,9 +8,9 @@ from pydantic import BaseModel, ValidationError, field_validator
 from structlog.testing import capture_logs
 
 from app.core.config import Settings
+from app.llm.structured_chat import StructuredChatClient, llm_error_summary
+from app.llm.validation import MAX_VALIDATION_DETAILS, validation_details
 from app.schemas.requirement import RequirementExtractionBatch
-from app.services.llm_validation import MAX_VALIDATION_DETAILS, validation_details
-from app.services.structured_chat import StructuredChatClient, llm_error_summary
 
 
 def requirement_batch(**overrides):
@@ -162,7 +162,7 @@ async def test_transport_retries_share_budget_with_one_repair(
             json.dumps(requirement_batch(confidence=95 if response == "invalid" else 0.9))
         )
 
-    monkeypatch.setattr("app.services.structured_chat.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("app.llm.structured_chat.asyncio.sleep", AsyncMock())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
         chat = StructuredChatClient(
             Settings(_env_file=None, llm_max_retries=retries),

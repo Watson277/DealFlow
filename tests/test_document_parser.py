@@ -5,7 +5,7 @@ import pytest
 from docx import Document as DocxDocument
 
 from app.core.exceptions import DocumentProcessingError, UnsupportedDocumentError
-from app.services.document_parser import DocumentParser
+from app.documents.parser import DocumentParser
 
 
 def test_parse_pdf_extracts_text_and_page_count() -> None:

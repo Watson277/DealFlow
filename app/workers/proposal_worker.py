@@ -16,8 +16,8 @@ from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.minio import ObjectStorageService
+from app.proposals.markdown_renderer import ProposalMarkdownRenderer
 from app.schemas.events import CapabilitiesEvaluatedEvent
-from app.services.proposal_renderer import ProposalMarkdownRenderer
 from app.workflow.stages.generate_proposal import ProposalProcessingService
 
 logger = structlog.get_logger(__name__)

@@ -4,8 +4,8 @@ from pydantic import BaseModel, ConfigDict
 
 from app.core.config import Settings
 from app.core.exceptions import ProposalGenerationError
+from app.llm.structured_chat import StructuredChatClient, llm_error_summary
 from app.schemas.proposal import ProposalDraft
-from app.services.structured_chat import StructuredChatClient, llm_error_summary
 
 PROPOSAL_INSTRUCTIONS = """
 You are the Proposal Agent for an enterprise sales engineering team.

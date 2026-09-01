@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError
 from app.db.session import async_session_factory
+from app.documents.parser import DocumentParser
 from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.minio import ObjectStorageService
@@ -25,7 +26,6 @@ from app.repositories import (
     WorkflowRunRepository,
 )
 from app.schemas.events import RFPUploadedEvent
-from app.services.document_parser import DocumentParser
 
 logger = structlog.get_logger(__name__)
 

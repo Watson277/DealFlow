@@ -6,6 +6,7 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DeletionConflictError, KnowledgeIndexError, KnowledgeNotFoundError
+from app.documents.parser import DocumentParser
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import Document
 from app.models.enums import DocumentStatus, DocumentType
@@ -14,7 +15,6 @@ from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import EmbeddingService
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.repositories import DocumentRepository
-from app.services.document_parser import DocumentParser
 
 
 @dataclass(frozen=True, slots=True)

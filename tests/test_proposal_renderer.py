@@ -1,6 +1,6 @@
 from app.models.enums import CapabilityStatus
+from app.proposals.markdown_renderer import ProposalMarkdownRenderer
 from app.schemas.proposal import ProposalDraft, ProposalRequirementResponse
-from app.services.proposal_renderer import ProposalMarkdownRenderer
 
 
 def test_proposal_markdown_renderer_builds_response_matrix() -> None:

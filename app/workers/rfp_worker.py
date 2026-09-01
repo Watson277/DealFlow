@@ -11,12 +11,12 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import LockNotAcquiredError
 from app.core.logging import configure_logging
 from app.db.session import close_database
+from app.documents.parser import DocumentParser
 from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.schemas.events import RFPUploadedEvent
-from app.services.document_parser import DocumentParser
 from app.workflow.stages.parse_rfp import RFPProcessingService
 
 logger = structlog.get_logger(__name__)

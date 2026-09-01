@@ -3,8 +3,8 @@ from typing import Protocol
 
 from app.core.config import Settings
 from app.core.exceptions import RequirementExtractionError
+from app.llm.structured_chat import StructuredChatClient, llm_error_summary
 from app.schemas.requirement import ExtractedRequirement, RequirementExtractionBatch
-from app.services.structured_chat import StructuredChatClient, llm_error_summary
 
 ANALYST_INSTRUCTIONS = """
 You are the RFP Analyst Agent for an enterprise proposal system.
