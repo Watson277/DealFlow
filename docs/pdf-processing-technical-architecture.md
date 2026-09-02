@@ -12,8 +12,13 @@ flowchart TD
     B1 -- 否 --> BX[拒绝处理并返回稳定错误码]
     B1 -- 是 --> C[打开 PDF 并获取总页数]
 
-    C --> D[读取第 N 页]
-    D --> E[页面质量检测]
+    C --> C1{达到并行阈值且 Provider 兼容}
+    C1 -- 否 --> D1[父进程按页串行提取]
+    C1 -- 是 --> D2[页面轮询分批]
+    D2 --> D3[共享 Process Pool]
+    D3 --> D4[每个进程独立打开 PDF]
+    D1 --> E[单页质量检测与路由]
+    D4 --> E
     E --> F{Page Type}
 
     F -- Native Text --> G[原生页处理路径]
@@ -25,15 +30,18 @@ flowchart TD
     I --> K[PageIR]
     J --> K
 
-    K --> L[版面语义与阅读顺序分析]
-    L --> M[最终 PageIR]
-    M --> N{还有下一页吗}
-    N -- 是 --> D
-    N -- 否 --> O[汇总 page_types]
+    K --> L[收集可能乱序完成的 PageIR]
+    L --> M[按 page_number 升序排序]
+    M --> N[文档级版面语义与阅读顺序分析]
+    N --> O[汇总 page_types]
     O --> P[确定 Document Type]
     P --> Q[生成并保存 DocumentIR JSON]
     Q --> R[RFP 或企业知识库下游流程]
 ```
+
+PyMuPDF 页对象不会在线程之间共享。并行模式使用进程池，每个进程拥有独立的
+`Document/Page`；并行仅覆盖页面级提取，依赖全局页面信息的页眉页脚识别、阅读顺序整理和
+DocumentIR 汇总仍在父进程中按页码顺序执行。
 
 文件预检负责检查：
 
@@ -183,4 +191,3 @@ flowchart TD
 | Block Fusion | `app/documents/pdf/fusion.py` |
 | 版面语义与阅读顺序 | `app/documents/pdf/layout/analyzer.py` |
 | DocumentIR 模型与序列化 | `app/documents/pdf/models.py`、`serialization.py` |
-

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import atexit
 import math
+import multiprocessing
+import threading
+from concurrent.futures import Executor, Future, ProcessPoolExecutor, as_completed, wait
 from dataclasses import dataclass
 from hashlib import sha256
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pymupdf
+import structlog
 from pydantic import JsonValue
 
 from app.documents.pdf.config import PDFParsingConfig
@@ -52,6 +59,11 @@ from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidato
 from app.documents.pdf.quality import BBoxTuple, PageQuality, PageQualityDetector
 from app.documents.pdf.vision import DisabledVisionProvider, VisionProvider, VisionRegionResult
 
+logger = structlog.get_logger(__name__)
+
+_PAGE_POOL_LOCK = threading.Lock()
+_PAGE_PROCESS_POOLS: dict[int, ProcessPoolExecutor] = {}
+
 
 @dataclass(frozen=True, slots=True)
 class NativePDFDocument:
@@ -84,6 +96,31 @@ class _RoutedExtraction:
     metadata: dict[str, JsonValue]
 
 
+@dataclass(frozen=True, slots=True)
+class _PageExtractionExecution:
+    requested: bool
+    applied: bool
+    mode: str
+    configured_workers: int
+    worker_count: int
+    minimum_pages: int
+    batch_count: int
+    fallback_reason: str | None = None
+
+    def as_metadata(self) -> dict[str, JsonValue]:
+        return {
+            "requested": self.requested,
+            "applied": self.applied,
+            "mode": self.mode,
+            "configured_workers": self.configured_workers,
+            "worker_count": self.worker_count,
+            "minimum_pages": self.minimum_pages,
+            "batch_count": self.batch_count,
+            "fallback_reason": self.fallback_reason,
+            "output_order": "page_number_ascending",
+        }
+
+
 class NativePDFParser:
     def __init__(
         self,
@@ -92,6 +129,8 @@ class NativePDFParser:
         layout_detector: LayoutDetector | None = None,
         table_recognizer: TableStructureRecognizer | None = None,
         vision_provider: VisionProvider | None = None,
+        *,
+        page_executor: Executor | None = None,
     ) -> None:
         self.config = config or PDFParsingConfig()
         self.preflight = PDFPreflightValidator(self.config)
@@ -107,6 +146,19 @@ class NativePDFParser:
         )
         self.vision_provider = vision_provider or DisabledVisionProvider()
         self.fusion = BlockFusion(self.config)
+        self.page_executor = page_executor
+        self._parallel_provider_compatible = (
+            all(
+                provider is None
+                for provider in (
+                    ocr_provider,
+                    layout_detector,
+                    table_recognizer,
+                    vision_provider,
+                )
+            )
+            and not self.config.vlm_enabled
+        )
 
     def parse(
         self,
@@ -127,9 +179,9 @@ class NativePDFParser:
                 filename=filename,
                 file_size_bytes=len(content),
             )
-            extracted_pages = tuple(
-                self._extract_page(_load_page(document, index), index + 1)
-                for index in range(document.page_count)
+            extracted_pages, page_execution = self._extract_pages(
+                content,
+                document,
             )
             pages = self.layout.analyze(extracted_pages)
 
@@ -162,6 +214,7 @@ class NativePDFParser:
                 "plain_text_sha256": sha256(text.encode("utf-8")).hexdigest(),
                 "plain_text_size_bytes": len(text.encode("utf-8")),
                 "source_pdf_metadata": result.metadata,
+                "page_extraction": page_execution.as_metadata(),
                 "page_types": [page.page_type.value for page in pages],
                 "page_routing": [
                     {
@@ -183,6 +236,118 @@ class NativePDFParser:
             parser_version=self.config.parser_version,
             ir=ir,
         )
+
+    def _extract_pages(
+        self,
+        content: bytes,
+        document: pymupdf.Document,
+    ) -> tuple[tuple[PageIR, ...], _PageExtractionExecution]:
+        page_count = document.page_count
+        worker_count = min(self.config.page_workers, page_count)
+        fallback_reason = self._parallel_skip_reason(page_count)
+        if fallback_reason is not None:
+            pages = self._extract_pages_sequential(document)
+            return pages, _PageExtractionExecution(
+                requested=self.config.page_parallel_enabled,
+                applied=False,
+                mode="sequential",
+                configured_workers=self.config.page_workers,
+                worker_count=1,
+                minimum_pages=self.config.page_parallel_min_pages,
+                batch_count=1,
+                fallback_reason=fallback_reason,
+            )
+
+        batches = _page_batches(page_count, worker_count)
+        try:
+            pages = self._extract_pages_parallel(content, batches)
+        except Exception as exc:
+            logger.warning(
+                "pdf_page_parallel_fallback",
+                page_count=page_count,
+                configured_workers=self.config.page_workers,
+                error_type=type(exc).__name__,
+            )
+            pages = self._extract_pages_sequential(document)
+            return pages, _PageExtractionExecution(
+                requested=True,
+                applied=False,
+                mode="sequential_fallback",
+                configured_workers=self.config.page_workers,
+                worker_count=1,
+                minimum_pages=self.config.page_parallel_min_pages,
+                batch_count=1,
+                fallback_reason=f"parallel_error:{type(exc).__name__}",
+            )
+
+        return pages, _PageExtractionExecution(
+            requested=True,
+            applied=True,
+            mode="process_pool",
+            configured_workers=self.config.page_workers,
+            worker_count=worker_count,
+            minimum_pages=self.config.page_parallel_min_pages,
+            batch_count=len(batches),
+        )
+
+    def _parallel_skip_reason(self, page_count: int) -> str | None:
+        if not self.config.page_parallel_enabled:
+            return "disabled"
+        if self.config.page_workers <= 1:
+            return "single_worker_configured"
+        if page_count < self.config.page_parallel_min_pages:
+            return "below_minimum_pages"
+        if not self._parallel_provider_compatible:
+            return "custom_or_vlm_provider"
+        return None
+
+    def _extract_pages_sequential(self, document: pymupdf.Document) -> tuple[PageIR, ...]:
+        return tuple(
+            self._extract_page(_load_page(document, index), index + 1)
+            for index in range(document.page_count)
+        )
+
+    def _extract_pages_parallel(
+        self,
+        content: bytes,
+        batches: tuple[tuple[int, ...], ...],
+    ) -> tuple[PageIR, ...]:
+        executor = self.page_executor or _get_page_process_pool(self.config.page_workers)
+        futures: list[Future[tuple[str, ...]]] = []
+        serialized_pages: list[str] = []
+        with TemporaryDirectory(prefix="dealflow-pdf-pages-") as directory:
+            pdf_path = Path(directory) / "source.pdf"
+            pdf_path.write_bytes(content)
+            for batch in batches:
+                future = cast(
+                    Future[tuple[str, ...]],
+                    executor.submit(
+                        _extract_page_batch,
+                        str(pdf_path),
+                        batch,
+                        self.config,
+                    ),
+                )
+                futures.append(future)
+            try:
+                for future in as_completed(futures):
+                    serialized_pages.extend(future.result())
+            except Exception:
+                for future in futures:
+                    future.cancel()
+                wait(futures)
+                raise
+
+        pages = tuple(
+            sorted(
+                (PageIR.model_validate_json(payload) for payload in serialized_pages),
+                key=lambda page: page.page_number,
+            )
+        )
+        expected_numbers = list(range(1, sum(len(batch) for batch in batches) + 1))
+        if [page.page_number for page in pages] != expected_numbers:
+            raise RuntimeError("parallel page extraction returned an incomplete page sequence")
+        return pages
 
     def _extract_page(self, page: pymupdf.Page, page_number: int) -> PageIR:
         width = float(page.rect.width)
@@ -662,6 +827,60 @@ class NativePDFParser:
         return candidates
 
 
+def _extract_page_batch(
+    pdf_path: str,
+    page_numbers: tuple[int, ...],
+    config: PDFParsingConfig,
+) -> tuple[str, ...]:
+    """Process one page batch in an isolated process with its own PDF document."""
+
+    import cv2
+
+    cv2.setNumThreads(1)
+    parser = NativePDFParser(config)
+    document = pymupdf.open(pdf_path)  # type: ignore[no-untyped-call]
+    with document:
+        return tuple(
+            parser._extract_page(
+                _load_page(document, page_number - 1), page_number
+            ).model_dump_json()
+            for page_number in page_numbers
+        )
+
+
+def _page_batches(page_count: int, worker_count: int) -> tuple[tuple[int, ...], ...]:
+    """Distribute pages round-robin to balance expensive OCR pages across workers."""
+
+    if page_count < 1:
+        return ()
+    resolved_workers = max(1, min(worker_count, page_count))
+    return tuple(
+        tuple(range(first_page, page_count + 1, resolved_workers))
+        for first_page in range(1, resolved_workers + 1)
+    )
+
+
+def _get_page_process_pool(max_workers: int) -> ProcessPoolExecutor:
+    with _PAGE_POOL_LOCK:
+        pool = _PAGE_PROCESS_POOLS.get(max_workers)
+        if pool is None:
+            pool = ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=multiprocessing.get_context("spawn"),
+                max_tasks_per_child=50,
+            )
+            _PAGE_PROCESS_POOLS[max_workers] = pool
+        return pool
+
+
+def _shutdown_page_process_pools() -> None:
+    with _PAGE_POOL_LOCK:
+        pools = tuple(_PAGE_PROCESS_POOLS.values())
+        _PAGE_PROCESS_POOLS.clear()
+    for pool in pools:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
 def _bounded_bbox(value: object, width: float, height: float) -> BoundingBox | None:
     if not isinstance(value, (list, tuple)) or len(value) < 4:
         return None
@@ -870,3 +1089,6 @@ def _document_type(pages: tuple[PageIR, ...]) -> PDFDocumentType:
     if page_types == {PDFPageType.SCANNED}:
         return PDFDocumentType.SCANNED
     return PDFDocumentType.MIXED
+
+
+atexit.register(_shutdown_page_process_pools)

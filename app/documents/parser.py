@@ -17,7 +17,6 @@ from app.documents.pdf import (
 from app.documents.pdf.layout.detection import LayoutDetector
 from app.documents.pdf.layout.tsr import TableStructureRecognizer
 from app.documents.pdf.vision import (
-    DisabledVisionProvider,
     OpenAICompatibleVisionProvider,
     VisionProvider,
 )
@@ -50,15 +49,13 @@ class DocumentParser:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "DocumentParser":
-        vision_provider: VisionProvider = (
-            OpenAICompatibleVisionProvider(settings)
-            if settings.pdf_vlm_enabled
-            else DisabledVisionProvider()
-        )
-        return cls(
-            PDFParsingConfig.from_settings(settings),
-            pdf_vision_provider=vision_provider,
-        )
+        config = PDFParsingConfig.from_settings(settings)
+        if settings.pdf_vlm_enabled:
+            return cls(
+                config,
+                pdf_vision_provider=OpenAICompatibleVisionProvider(settings),
+            )
+        return cls(config)
 
     def parse(
         self,

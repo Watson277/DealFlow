@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     max_rfp_upload_size_bytes: int = 50 * 1024 * 1024
     pdf_parser_version: str = Field(
-        default="page-routing-layout-2.0",
+        default="page-routing-layout-2.1",
         min_length=1,
         max_length=64,
     )
@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     pdf_fusion_iou_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
     pdf_fusion_text_similarity_threshold: float = Field(default=0.88, ge=0.0, le=1.0)
     pdf_fusion_table_text_overlap_threshold: float = Field(default=0.50, ge=0.0, le=1.0)
+    pdf_page_parallel_enabled: bool = True
+    pdf_page_workers: int = Field(default=4, ge=1, le=16)
+    pdf_page_parallel_min_pages: int = Field(default=4, ge=2, le=10_000)
     rfp_lock_ttl_seconds: int = 300
     rfp_lock_acquire_timeout_seconds: float = 10.0
 

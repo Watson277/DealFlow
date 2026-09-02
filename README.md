@@ -78,6 +78,12 @@ Chat Completions 的 VLM。VLM 默认关闭，只有显式设置 `PDF_VLM_ENABLE
 `caption`。全部页面处理完成后，才汇总 `page_types[]` 得到 `DocumentIR.document_type`；每页实际
 路由和融合统计也会写入 IR metadata，便于排障和追溯。
 
+页提取支持受控多进程并行。达到 `PDF_PAGE_PARALLEL_MIN_PAGES` 后，页面按轮询方式分配给最多
+`PDF_PAGE_WORKERS` 个进程；每个进程独立打开 PDF，避免跨线程共享 PyMuPDF 对象。页面即使乱序
+完成，也会在父进程中按 `page_number` 排序后再执行文档级版面分析。短文档、自定义 Provider、
+启用 VLM 或进程池异常时自动使用串行路径。并行状态和降级原因记录在
+`DocumentIR.metadata.page_extraction`。
+
 ### 本地 PDF 解析测试接口
 
 开发环境提供 `POST /dev/pdf/parse`。它不会访问任意服务器路径，而是接收本地上传的 PDF，

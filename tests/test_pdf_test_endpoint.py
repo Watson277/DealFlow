@@ -55,6 +55,8 @@ def test_pdf_test_endpoint_returns_document_ir_markdown_and_summary_zip() -> Non
     assert document_ir["page_count"] == 1
     assert "DealFlow local PDF parser test" in markdown
     assert summary["page_types"] == ["text"]
+    assert summary["page_extraction"]["mode"] == "sequential"
+    assert summary["page_extraction"]["fallback_reason"] == "below_minimum_pages"
     assert summary["page_routes"][0]["route"] == "native_pymupdf"
 
 

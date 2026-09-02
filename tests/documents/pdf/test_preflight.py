@@ -105,6 +105,9 @@ def test_pdf_config_loads_from_application_settings() -> None:
         pdf_fusion_iou_threshold=0.6,
         pdf_fusion_text_similarity_threshold=0.9,
         pdf_fusion_table_text_overlap_threshold=0.55,
+        pdf_page_parallel_enabled=False,
+        pdf_page_workers=3,
+        pdf_page_parallel_min_pages=6,
     )
 
     config = PDFParsingConfig.from_settings(settings)
@@ -138,6 +141,9 @@ def test_pdf_config_loads_from_application_settings() -> None:
         fusion_iou_threshold=0.6,
         fusion_text_similarity_threshold=0.9,
         fusion_table_text_overlap_threshold=0.55,
+        page_parallel_enabled=False,
+        page_workers=3,
+        page_parallel_min_pages=6,
     )
 
 

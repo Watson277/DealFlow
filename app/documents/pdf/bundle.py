@@ -27,6 +27,7 @@ def build_pdf_parse_bundle(parsed: ParsedDocument, source_filename: str) -> tupl
         "document_type": document_ir.document_type.value,
         "status": document_ir.status.value,
         "page_count": document_ir.page_count,
+        "page_extraction": document_ir.metadata.get("page_extraction"),
         "page_types": [page.page_type.value for page in document_ir.pages],
         "page_routes": [
             {

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class PDFParsingConfig:
-    parser_version: str = "page-routing-layout-2.0"
+    parser_version: str = "page-routing-layout-2.1"
     max_pages: int = 500
     min_effective_chars: int = 20
     max_garbled_ratio: float = 0.10
@@ -39,6 +39,9 @@ class PDFParsingConfig:
     fusion_iou_threshold: float = 0.55
     fusion_text_similarity_threshold: float = 0.88
     fusion_table_text_overlap_threshold: float = 0.50
+    page_parallel_enabled: bool = True
+    page_workers: int = 4
+    page_parallel_min_pages: int = 4
 
     def __post_init__(self) -> None:
         if not self.parser_version.strip():
@@ -54,6 +57,10 @@ class PDFParsingConfig:
         ):
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be between zero and one")
+        if not 1 <= self.page_workers <= 16:
+            raise ValueError("page_workers must be between one and 16")
+        if self.page_parallel_min_pages < 2:
+            raise ValueError("page_parallel_min_pages must be at least two")
         if self.mixed_image_coverage_threshold > self.scanned_image_coverage_threshold:
             raise ValueError("mixed_image_coverage_threshold must not exceed the scanned threshold")
         if not 72 <= self.ocr_dpi <= 600:
@@ -124,4 +131,7 @@ class PDFParsingConfig:
             fusion_iou_threshold=settings.pdf_fusion_iou_threshold,
             fusion_text_similarity_threshold=settings.pdf_fusion_text_similarity_threshold,
             fusion_table_text_overlap_threshold=settings.pdf_fusion_table_text_overlap_threshold,
+            page_parallel_enabled=settings.pdf_page_parallel_enabled,
+            page_workers=settings.pdf_page_workers,
+            page_parallel_min_pages=settings.pdf_page_parallel_min_pages,
         )
