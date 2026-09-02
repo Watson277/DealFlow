@@ -30,6 +30,7 @@ async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) 
         block_types=("paragraph",),
         location=location,
         char_count=60,
+        token_count=16,
         content_hash="a" * 64,
     )
     children = [
@@ -46,6 +47,8 @@ async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) 
             block_types=("paragraph",),
             location=location,
             char_count=22,
+            token_count=8,
+            embedding_token_count=12,
             content_hash="b" * 64,
         ),
         ChildChunk(
@@ -61,6 +64,8 @@ async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) 
             block_types=("paragraph",),
             location=location,
             char_count=37,
+            token_count=9,
+            embedding_token_count=13,
             content_hash="c" * 64,
         ),
     ]
@@ -91,5 +96,10 @@ async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) 
         assert points
         assert all("parent_text" not in (point.payload or {}) for point in points)
         assert all((point.payload or {}).get("chunk_level") == "child" for point in points)
+        assert {(point.payload or {}).get("token_count") for point in points} == {8, 9}
+        assert {(point.payload or {}).get("embedding_token_count") for point in points} == {
+            12,
+            13,
+        }
     finally:
         await store.close()

@@ -17,6 +17,7 @@ def test_knowledge_chunk_table_has_parent_persistence_columns() -> None:
         "source_node_ids",
         "block_types",
         "char_count",
+        "token_count",
         "content_hash",
         "created_at",
         "updated_at",

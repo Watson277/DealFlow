@@ -37,12 +37,15 @@ DOCX text ────── DocxStructureAdapter ─────┘  Hierarchic
 默认配置：
 
 ```text
-KNOWLEDGE_PARENT_CHUNK_SIZE_CHARS=4000
-KNOWLEDGE_CHILD_CHUNK_SIZE_CHARS=1200
-KNOWLEDGE_CHILD_OVERLAP_CHARS=120
+KNOWLEDGE_TOKENIZER_ENCODING=cl100k_base
+KNOWLEDGE_PARENT_CHUNK_SIZE_TOKENS=1200
+KNOWLEDGE_CHILD_CHUNK_SIZE_TOKENS=350
+KNOWLEDGE_CHILD_OVERLAP_TOKENS=40
 ```
 
-Parent 不跨章节路径合并，普通段落在达到 Parent 上限时拆分。Child 只能在自己的 Parent 内生成；普通长文本优先在段落、句号或换行处切分，仅长文本使用 overlap。
+父子块预算使用 `tiktoken` 的可配置编码计算，不再使用字符数判断。默认的 `cl100k_base` 为本地稳定、可重复的预算口径；使用非 OpenAI 模型时可能和服务端 tokenizer 存在少量差异，可以通过替换 `TokenCounter` 实现接入模型官方 tokenizer。
+
+Parent 不跨章节路径合并，普通段落在达到 Parent Token 上限时拆分。Child 只能在自己的 Parent 内生成；Child Budget 包含 Document、Version、Section 等 Embedding 上下文，避免实际送入 Embedding 的文本超过预算。普通长文本优先在段落、句号或换行处切分，仅长文本使用 Token overlap。
 
 表格、代码、图片和公式属于原子结构：
 
@@ -67,7 +70,7 @@ Document 的 `extra_data` 会记录：
 - `child_chunk_count`；
 - `qdrant_point_count`。
 
-MySQL 的 `knowledge_chunks` 表保存 Parent 正文、来源位置、章节路径和内容哈希。Qdrant 只为 Child 保存向量，Child payload 保存 `parent_id` 和自身来源信息，不复制 Parent 正文。
+MySQL 的 `knowledge_chunks` 表保存 Parent 正文、来源位置、章节路径、`char_count`、`token_count` 和内容哈希。Qdrant 只为 Child 保存向量，Child payload 保存 `parent_id`、`token_count`、`embedding_token_count` 和自身来源信息，不复制 Parent 正文。
 
 检索时先扩大 Child 候选范围，再批量用 `parent_id` 从 MySQL 加载 Parent，按 `document_id + parent_id` 去重，最后把 Parent 上下文交给 Capability Agent；`matched_child_text` 仍被保留用于解释命中原因。旧索引没有对应 Parent 记录时继续返回 Child，确保迁移期间兼容。
 

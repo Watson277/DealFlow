@@ -37,6 +37,7 @@ class KnowledgeChunkRepository(BaseRepository[KnowledgeChunkRecord]):
                     source_node_ids=list(parent.source_node_ids),
                     block_types=list(parent.block_types),
                     char_count=parent.char_count,
+                    token_count=parent.token_count,
                     content_hash=parent.content_hash,
                 )
                 for parent in parents

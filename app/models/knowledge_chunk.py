@@ -34,6 +34,7 @@ class KnowledgeChunkRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint("chunk_order >= 0", name="chunk_order_nonnegative"),
         CheckConstraint("char_count > 0", name="char_count_positive"),
+        CheckConstraint("token_count > 0", name="token_count_positive"),
         CheckConstraint(
             "chunk_level IN ('PARENT', 'CHILD')",
             name="chunk_level_valid",
@@ -61,6 +62,7 @@ class KnowledgeChunkRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_node_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     block_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     char_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
     document: Mapped[Document] = relationship(back_populates="knowledge_chunks")

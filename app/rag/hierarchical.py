@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.core.exceptions import KnowledgeIndexError
 from app.documents.pdf.models import BlockIR, DocumentIR, PDFBlockType
 from app.rag.markdown import MarkdownUnit, parse_markdown_units
+from app.rag.tokenization import TokenCounter
 
 NodeType: TypeAlias = Literal[
     "heading",
@@ -101,6 +102,7 @@ class ParentChunk(ChunkIRModel):
     block_types: tuple[str, ...]
     location: SourceLocation
     char_count: int = Field(ge=1)
+    token_count: int = Field(ge=1)
     content_hash: str
 
 
@@ -118,11 +120,13 @@ class ChildChunk(ChunkIRModel):
     block_types: tuple[str, ...]
     location: SourceLocation
     char_count: int = Field(ge=1)
+    token_count: int = Field(ge=1)
+    embedding_token_count: int = Field(ge=1)
     content_hash: str
 
 
 class KnowledgeChunkBundle(ChunkIRModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.1"] = "1.1"
     document_id: str
     source_type: SourceType
     parents: tuple[ParentChunk, ...]
@@ -132,6 +136,8 @@ class KnowledgeChunkBundle(ChunkIRModel):
 @dataclass(frozen=True, slots=True)
 class _ParentDraft:
     nodes: tuple[StructuralNode, ...]
+    text: str
+    atomic: bool = False
 
 
 class PDFStructureAdapter:
@@ -350,13 +356,14 @@ class HierarchicalKnowledgeChunker:
     """Build semantic parents and retrieval-sized children from structural nodes."""
 
     def __init__(self, settings: Settings) -> None:
-        self.parent_size = settings.knowledge_parent_chunk_size_chars
-        self.child_size = settings.knowledge_child_chunk_size_chars
-        self.overlap = settings.knowledge_child_overlap_chars
-        if self.parent_size < self.child_size:
-            raise KnowledgeIndexError("parent chunk size must be at least child chunk size")
-        if self.overlap < 0 or self.overlap >= self.child_size:
-            raise KnowledgeIndexError("child overlap must be between zero and child size")
+        self.parent_budget = settings.knowledge_parent_chunk_size_tokens
+        self.child_budget = settings.knowledge_child_chunk_size_tokens
+        self.overlap = settings.knowledge_child_overlap_tokens
+        self.tokens = TokenCounter(settings.knowledge_tokenizer_encoding)
+        if self.parent_budget < self.child_budget:
+            raise KnowledgeIndexError("parent token budget must be at least child token budget")
+        if self.overlap < 0 or self.overlap >= self.child_budget:
+            raise KnowledgeIndexError("child token overlap must be below child token budget")
 
     def split(self, document: StructuralDocument) -> KnowledgeChunkBundle:
         if not document.nodes:
@@ -367,7 +374,10 @@ class HierarchicalKnowledgeChunker:
         for parent_order, draft in enumerate(drafts):
             parent = self._parent(document, draft, parent_order)
             parents.append(parent)
-            for child_order, (text, nodes) in enumerate(self._child_drafts(draft.nodes)):
+            child_content_budget = self._child_content_budget(document, parent.section_path)
+            for child_order, (text, nodes) in enumerate(
+                self._child_drafts(draft, child_content_budget)
+            ):
                 children.append(
                     self._child(
                         document,
@@ -393,18 +403,42 @@ class HierarchicalKnowledgeChunker:
 
         def flush() -> None:
             if pending:
-                drafts.append(_ParentDraft(nodes=tuple(pending)))
+                nodes_to_emit = tuple(pending)
+                drafts.append(
+                    _ParentDraft(
+                        nodes=nodes_to_emit,
+                        text="\n\n".join(node.text for node in nodes_to_emit),
+                    )
+                )
                 pending.clear()
 
         for node in nodes:
             if node.atomic:
                 flush()
-                drafts.append(_ParentDraft(nodes=(node,)))
+                drafts.extend(
+                    _ParentDraft(nodes=(node,), text=part, atomic=True)
+                    for part in self._split_atomic_text(
+                        node.text,
+                        node_type=node.node_type,
+                        budget=self.parent_budget,
+                    )
+                )
                 continue
-            candidate_size = len(node.text) + sum(len(item.text) + 2 for item in pending)
+            if self.tokens.count(node.text) > self.parent_budget:
+                flush()
+                drafts.extend(
+                    _ParentDraft(nodes=(node,), text=part)
+                    for part in self._split_text(
+                        node.text,
+                        budget=self.parent_budget,
+                        overlap=0,
+                    )
+                )
+                continue
+            candidate = "\n\n".join([*(item.text for item in pending), node.text])
             if pending and (
                 pending[-1].section_path != node.section_path
-                or candidate_size > self.parent_size
+                or self.tokens.count(candidate) > self.parent_budget
             ):
                 flush()
             pending.append(node)
@@ -417,7 +451,7 @@ class HierarchicalKnowledgeChunker:
         draft: _ParentDraft,
         order: int,
     ) -> ParentChunk:
-        text = "\n\n".join(node.text for node in draft.nodes).strip()
+        text = draft.text.strip()
         section_path = draft.nodes[0].section_path
         identity = f"dealflow:{document.document_id}:parent:{order}:{' > '.join(section_path)}"
         return ParentChunk(
@@ -434,14 +468,49 @@ class HierarchicalKnowledgeChunker:
             ),
             location=_merge_locations(draft.nodes),
             char_count=len(text),
+            token_count=self.tokens.count(text),
             content_hash=_content_hash(text),
         )
 
+    def _child_content_budget(
+        self,
+        document: StructuralDocument,
+        section_path: tuple[str, ...],
+    ) -> int:
+        context_tokens = self.tokens.count(_embedding_text(document, section_path, ""))
+        available = self.child_budget - context_tokens - 4
+        if available < 1:
+            raise KnowledgeIndexError(
+                "document and section context exceeds the child token budget"
+            )
+        return available
+
     def _child_drafts(
-        self, nodes: tuple[StructuralNode, ...]
+        self,
+        draft: _ParentDraft,
+        budget: int,
     ) -> list[tuple[str, tuple[StructuralNode, ...]]]:
-        if len(nodes) == 1 and nodes[0].atomic:
-            return [(part, nodes) for part in self._split_atomic(nodes[0])]
+        nodes = draft.nodes
+        if draft.atomic:
+            return [
+                (part, nodes)
+                for part in self._split_atomic_text(
+                    draft.text,
+                    node_type=nodes[0].node_type,
+                    budget=budget,
+                )
+            ]
+
+        original_text = "\n\n".join(node.text for node in nodes)
+        if draft.text != original_text:
+            return [
+                (part, nodes)
+                for part in self._split_text(
+                    draft.text,
+                    budget=budget,
+                    overlap=self.overlap,
+                )
+            ]
 
         drafts: list[tuple[str, tuple[StructuralNode, ...]]] = []
         pending: list[StructuralNode] = []
@@ -452,31 +521,44 @@ class HierarchicalKnowledgeChunker:
                 pending.clear()
 
         for node in nodes:
-            if len(node.text) > self.child_size:
+            if self.tokens.count(node.text) > budget:
                 flush()
-                drafts.extend((part, (node,)) for part in self._split_text(node.text))
+                drafts.extend(
+                    (part, (node,))
+                    for part in self._split_text(
+                        node.text,
+                        budget=budget,
+                        overlap=self.overlap,
+                    )
+                )
                 continue
-            candidate_size = len(node.text) + sum(len(item.text) + 2 for item in pending)
-            if pending and candidate_size > self.child_size:
+            candidate = "\n\n".join([*(item.text for item in pending), node.text])
+            if pending and self.tokens.count(candidate) > budget:
                 flush()
             pending.append(node)
         flush()
         return drafts
 
-    def _split_atomic(self, node: StructuralNode) -> list[str]:
-        if len(node.text) <= self.child_size:
-            return [node.text]
-        if node.node_type == "table":
-            table_parts = self._split_table(node.text)
+    def _split_atomic_text(
+        self,
+        text: str,
+        *,
+        node_type: NodeType,
+        budget: int,
+    ) -> list[str]:
+        if self.tokens.count(text) <= budget:
+            return [text]
+        if node_type == "table":
+            table_parts = self._split_table(text, budget=budget)
             if table_parts:
                 return table_parts
-        if node.node_type == "code":
-            code_parts = self._split_code(node.text)
+        if node_type == "code":
+            code_parts = self._split_code(text, budget=budget)
             if code_parts:
                 return code_parts
-        return self._split_text(node.text)
+        return self._split_text(text, budget=budget, overlap=0)
 
-    def _split_table(self, table: str) -> list[str] | None:
+    def _split_table(self, table: str, *, budget: int) -> list[str] | None:
         lines = [line.strip() for line in table.splitlines() if line.strip()]
         separator_index = next(
             (
@@ -489,21 +571,38 @@ class HierarchicalKnowledgeChunker:
         if separator_index is None or separator_index + 1 >= len(lines):
             return None
         header = lines[: separator_index + 1]
+        header_text = "\n".join(header)
+        if self.tokens.count(header_text) >= budget:
+            return self._split_text(table, budget=budget, overlap=0)
         rows = lines[separator_index + 1 :]
         parts: list[str] = []
         current = [*header]
         for row in rows:
             candidate = "\n".join([*current, row])
-            if len(candidate) <= self.child_size or len(current) == len(header):
+            if self.tokens.count(candidate) <= budget:
                 current.append(row)
-            else:
+                continue
+            if len(current) > len(header):
                 parts.append("\n".join(current))
-                current = [*header, row]
+                current = [*header]
+            row_candidate = f"{header_text}\n{row}"
+            if self.tokens.count(row_candidate) <= budget:
+                current.append(row)
+                continue
+            row_budget = max(1, budget - self.tokens.count(f"{header_text}\n") - 2)
+            parts.extend(
+                f"{header_text}\n{row_part}"
+                for row_part in self.tokens.split(
+                    row,
+                    budget=row_budget,
+                    separators=(),
+                )
+            )
         if len(current) > len(header):
             parts.append("\n".join(current))
         return parts or None
 
-    def _split_code(self, code: str) -> list[str] | None:
+    def _split_code(self, code: str, *, budget: int) -> list[str] | None:
         lines = code.splitlines()
         match = _FENCE_START.match(lines[0]) if lines else None
         if match is None:
@@ -512,41 +611,42 @@ class HierarchicalKnowledgeChunker:
         has_closing = len(lines) > 1 and lines[-1].lstrip().startswith(fence)
         closing = lines[-1] if has_closing else fence
         body = lines[1:-1] if has_closing else lines[1:]
+        wrapper_tokens = self.tokens.count(f"{lines[0]}\n\n{closing}")
+        if wrapper_tokens >= budget:
+            return self._split_text(code, budget=budget, overlap=0)
+        line_budget = max(1, budget - wrapper_tokens - 2)
+        segments: list[str] = []
+        for line in body:
+            candidate = "\n".join([lines[0], line, closing])
+            if self.tokens.count(candidate) <= budget:
+                segments.append(line)
+            else:
+                segments.extend(
+                    self.tokens.split(
+                        line,
+                        budget=line_budget,
+                        separators=(),
+                    )
+                )
         parts: list[str] = []
         current: list[str] = []
-        for line in body:
+        for line in segments:
             candidate = "\n".join([lines[0], *current, line, closing])
-            if len(candidate) <= self.child_size or not current:
+            if self.tokens.count(candidate) <= budget:
                 current.append(line)
             else:
-                parts.append("\n".join([lines[0], *current, closing]))
+                if current:
+                    parts.append("\n".join([lines[0], *current, closing]))
                 current = [line]
         if current or not parts:
             parts.append("\n".join([lines[0], *current, closing]))
         return parts
 
-    def _split_text(self, text: str) -> list[str]:
-        parts: list[str] = []
-        start = 0
-        while start < len(text):
-            proposed_end = min(start + self.child_size, len(text))
-            end = proposed_end
-            if proposed_end < len(text):
-                for separator in ("\n\n", "。", ". ", "\n"):
-                    boundary = text.rfind(separator, start, proposed_end)
-                    if boundary > start + self.child_size // 2:
-                        end = boundary + len(separator)
-                        break
-            content = text[start:end].strip()
-            if content:
-                parts.append(content)
-            if end >= len(text):
-                break
-            start = max(end - self.overlap, start + 1)
-        return parts
+    def _split_text(self, text: str, *, budget: int, overlap: int) -> list[str]:
+        return self.tokens.split(text, budget=budget, overlap=overlap)
 
-    @staticmethod
     def _child(
+        self,
         document: StructuralDocument,
         parent: ParentChunk,
         text: str,
@@ -556,12 +656,16 @@ class HierarchicalKnowledgeChunker:
         child_order: int,
     ) -> ChildChunk:
         identity = f"dealflow:{parent.chunk_id}:child:{child_order}:{_content_hash(text)}"
+        embedding_text = _embedding_text(document, parent.section_path, text)
+        embedding_token_count = self.tokens.count(embedding_text)
+        if embedding_token_count > self.child_budget:
+            raise KnowledgeIndexError("child embedding text exceeds its token budget")
         return ChildChunk(
             chunk_id=str(uuid5(NAMESPACE_URL, identity)),
             parent_id=parent.chunk_id,
             document_id=document.document_id,
             text=text,
-            embedding_text=_embedding_text(document, parent.section_path, text),
+            embedding_text=embedding_text,
             section_path=parent.section_path,
             order=order,
             child_order=child_order,
@@ -569,6 +673,8 @@ class HierarchicalKnowledgeChunker:
             block_types=_ordered_unique(tuple(node.node_type for node in nodes)),
             location=_merge_locations(nodes),
             char_count=len(text),
+            token_count=self.tokens.count(text),
+            embedding_token_count=embedding_token_count,
             content_hash=_content_hash(text),
         )
 

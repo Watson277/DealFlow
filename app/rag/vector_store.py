@@ -96,6 +96,8 @@ class QdrantKnowledgeStore:
                 section_path = chunk.section_path
                 block_types = chunk.block_types
                 parent_id = chunk.parent_id
+                token_count = chunk.token_count
+                embedding_token_count = chunk.embedding_token_count
             else:
                 chunk_index = chunk.chunk_index
                 point_id = str(
@@ -110,6 +112,8 @@ class QdrantKnowledgeStore:
                 section_path = getattr(chunk, "section_path", ())
                 block_types = getattr(chunk, "block_types", ())
                 parent_id = getattr(chunk, "parent_id", None)
+                token_count = None
+                embedding_token_count = None
             point_ids.append(point_id)
             points.append(
                 PointStruct(
@@ -130,6 +134,8 @@ class QdrantKnowledgeStore:
                         "parent_id": parent_id,
                         "source_type": source_type,
                         "location": location,
+                        "token_count": token_count,
+                        "embedding_token_count": embedding_token_count,
                         "category": category,
                         "status": "ACTIVE",
                         "text": chunk.text,

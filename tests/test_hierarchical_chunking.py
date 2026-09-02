@@ -25,9 +25,9 @@ from app.rag.hierarchical import (
 def _settings(*, parent_size: int = 300, child_size: int = 100) -> Settings:
     return Settings(
         _env_file=None,
-        knowledge_parent_chunk_size_chars=parent_size,
-        knowledge_child_chunk_size_chars=child_size,
-        knowledge_child_overlap_chars=10,
+        knowledge_parent_chunk_size_tokens=parent_size,
+        knowledge_child_chunk_size_tokens=child_size,
+        knowledge_child_overlap_tokens=10,
     )
 
 
@@ -109,6 +109,7 @@ def test_pdf_and_markdown_share_one_hierarchical_output_schema() -> None:
         child.parent_id == markdown_bundle.parents[0].chunk_id
         for child in markdown_bundle.children
     )
+    assert pdf_bundle.schema_version == "1.1"
 
 
 def test_child_embedding_context_is_separate_from_original_text() -> None:
@@ -138,6 +139,9 @@ def test_markdown_table_is_one_parent_and_children_repeat_header() -> None:
         "| Enterprise | SAML 2.0 |\n"
         "| Business | OIDC |\n"
         "| Community | Password only |\n"
+        "| Government | SAML, OIDC, SCIM and audit logging |\n"
+        "| Education | SAML, roster sync and delegated administration |\n"
+        "| Healthcare | SAML, audit logging and data residency |\n"
     )
     document = MarkdownStructureAdapter.convert(
         markdown,
@@ -147,7 +151,7 @@ def test_markdown_table_is_one_parent_and_children_repeat_header() -> None:
     )
 
     bundle = HierarchicalKnowledgeChunker(
-        _settings(parent_size=300, child_size=100)
+        _settings(parent_size=300, child_size=50)
     ).split(document)
 
     assert len(bundle.parents) == 1
@@ -157,6 +161,7 @@ def test_markdown_table_is_one_parent_and_children_repeat_header() -> None:
         child.text.startswith("| Product | Capability |\n| --- | --- |")
         for child in bundle.children
     )
+    assert all(child.embedding_token_count <= 50 for child in bundle.children)
 
 
 def test_parent_ids_are_scoped_to_document() -> None:
@@ -187,3 +192,69 @@ def test_chunk_bundle_json_round_trips() -> None:
     restored = KnowledgeChunkBundle.model_validate_json(serialize_knowledge_chunks(bundle))
 
     assert restored == bundle
+
+
+def test_parent_and_child_limits_use_tokens_for_chinese_text() -> None:
+    document = MarkdownStructureAdapter.convert(
+        "# 安全能力\n\n" + "身份认证、审计日志和访问控制能力。" * 120,
+        document_id=str(uuid4()),
+        title="企业平台",
+        version="1.0",
+    )
+    chunker = HierarchicalKnowledgeChunker(
+        _settings(parent_size=100, child_size=50)
+    )
+
+    bundle = chunker.split(document)
+
+    assert len(bundle.parents) > 1
+    assert all(parent.token_count <= 100 for parent in bundle.parents)
+    assert all(child.embedding_token_count <= 50 for child in bundle.children)
+    assert any(child.token_count != child.char_count for child in bundle.children)
+
+
+def test_large_atomic_table_obeys_parent_and_child_token_budgets() -> None:
+    rows = "\n".join(
+        f"| Product {index} | SAML OIDC SCIM audit logging and monitoring |"
+        for index in range(30)
+    )
+    document = MarkdownStructureAdapter.convert(
+        "# Products\n\n| Product | Capability |\n| --- | --- |\n" + rows,
+        document_id=str(uuid4()),
+        title=None,
+        version=None,
+    )
+
+    bundle = HierarchicalKnowledgeChunker(
+        _settings(parent_size=100, child_size=50)
+    ).split(document)
+
+    assert len(bundle.parents) > 1
+    assert all(parent.token_count <= 100 for parent in bundle.parents)
+    assert all(child.embedding_token_count <= 50 for child in bundle.children)
+    assert all(
+        child.text.startswith("| Product | Capability |\n| --- | --- |")
+        for child in bundle.children
+    )
+
+
+def test_large_code_block_obeys_child_budget_and_preserves_fences() -> None:
+    code = "\n".join(
+        f'policy_{index} = {{"audit_logging": true, "retention_days": 180}}'
+        for index in range(30)
+    )
+    document = MarkdownStructureAdapter.convert(
+        f"# Configuration\n\n```python\n{code}\n```",
+        document_id=str(uuid4()),
+        title=None,
+        version=None,
+    )
+
+    bundle = HierarchicalKnowledgeChunker(
+        _settings(parent_size=300, child_size=50)
+    ).split(document)
+
+    assert len(bundle.children) > 1
+    assert all(child.embedding_token_count <= 50 for child in bundle.children)
+    assert all(child.text.startswith("```python\n") for child in bundle.children)
+    assert all(child.text.endswith("\n```") for child in bundle.children)

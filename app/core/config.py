@@ -138,9 +138,10 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 64
     knowledge_chunk_size_chars: int = 1_500
     knowledge_chunk_overlap_chars: int = 200
-    knowledge_parent_chunk_size_chars: int = Field(default=4_000, ge=200)
-    knowledge_child_chunk_size_chars: int = Field(default=1_200, ge=100)
-    knowledge_child_overlap_chars: int = Field(default=120, ge=0)
+    knowledge_tokenizer_encoding: str = Field(default="cl100k_base", min_length=1, max_length=64)
+    knowledge_parent_chunk_size_tokens: int = Field(default=1_200, ge=100)
+    knowledge_child_chunk_size_tokens: int = Field(default=350, ge=50)
+    knowledge_child_overlap_tokens: int = Field(default=40, ge=0)
     capability_max_output_tokens: int = 2_000
     capability_lock_ttl_seconds: int = 1_800
     capability_prompt_version: str = "capability-v1"
