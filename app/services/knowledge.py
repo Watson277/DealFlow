@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from app.models.enums import DocumentStatus, DocumentType
 from app.models.mixins import generate_uuid, utc_now
 from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import EmbeddingService
+from app.rag.markdown import MarkdownKnowledgeChunker
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.repositories import DocumentRepository
 
@@ -104,7 +106,15 @@ class KnowledgeService:
                     serialize_document_ir(parsed.document_ir),
                     content_type=DOCUMENT_IR_CONTENT_TYPE,
                 )
-            chunks = self.chunker.split(parsed.text)
+            source_extension = Path(stored.original_filename).suffix.lower()
+            if source_extension in {".md", ".markdown"}:
+                chunks = MarkdownKnowledgeChunker(self.vector_store.settings).split(
+                    parsed.text,
+                    document_title=title,
+                    document_version=version,
+                )
+            else:
+                chunks = self.chunker.split(parsed.text)
             vectors = await self.embeddings.embed([chunk.text for chunk in chunks])
             point_ids = await self.vector_store.index_document(
                 document_id=document_id,

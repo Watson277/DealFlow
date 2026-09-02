@@ -17,10 +17,13 @@ from app.core.exceptions import (
     UploadTooLargeError,
 )
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+RFP_ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+KNOWLEDGE_ALLOWED_EXTENSIONS = {".pdf", ".docx", ".md", ".markdown"}
 CONTENT_TYPES = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".md": "text/markdown; charset=utf-8",
+    ".markdown": "text/markdown; charset=utf-8",
 }
 
 
@@ -53,7 +56,7 @@ class ObjectStorageService:
     ) -> StoredObject:
         original_filename = Path(upload.filename or "upload").name
         extension = Path(original_filename).suffix.lower()
-        if extension not in ALLOWED_EXTENSIONS:
+        if extension not in RFP_ALLOWED_EXTENSIONS:
             raise UnsupportedDocumentError("only PDF and DOCX files are supported")
 
         safe_filename = self._sanitize_filename(original_filename)
@@ -69,8 +72,10 @@ class ObjectStorageService:
     ) -> StoredObject:
         original_filename = Path(upload.filename or "upload").name
         extension = Path(original_filename).suffix.lower()
-        if extension not in ALLOWED_EXTENSIONS:
-            raise UnsupportedDocumentError("only PDF and DOCX files are supported")
+        if extension not in KNOWLEDGE_ALLOWED_EXTENSIONS:
+            raise UnsupportedDocumentError(
+                "only PDF, DOCX, and Markdown knowledge files are supported"
+            )
         safe_filename = self._sanitize_filename(original_filename)
         safe_category = self._sanitize_filename(category.lower())
         object_key = f"knowledge/{safe_category}/{document_id}/{safe_filename}"
@@ -88,7 +93,11 @@ class ObjectStorageService:
             upload.file,
             self.settings.max_rfp_upload_size_bytes,
         )
-        content_type = upload.content_type or CONTENT_TYPES[extension]
+        content_type = (
+            CONTENT_TYPES[extension]
+            if not upload.content_type or upload.content_type == "application/octet-stream"
+            else upload.content_type
+        )
 
         try:
             await asyncio.to_thread(

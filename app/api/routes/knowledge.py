@@ -52,7 +52,10 @@ async def delete_knowledge_document(
 
 @router.post("", response_model=KnowledgeDocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_knowledge_document(
-    file: Annotated[UploadFile, File(description="Enterprise knowledge PDF or DOCX")],
+    file: Annotated[
+        UploadFile,
+        File(description="Enterprise knowledge PDF, DOCX, MD, or MARKDOWN file"),
+    ],
     title: Annotated[str, Form(min_length=1, max_length=255)],
     category: Annotated[str, Form(min_length=1, max_length=64)],
     service: Annotated[KnowledgeService, Depends(get_knowledge_service)],

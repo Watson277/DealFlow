@@ -41,6 +41,30 @@ def test_parse_docx_extracts_paragraphs_and_tables() -> None:
     assert parsed.document_ir is None
 
 
+def test_parse_markdown_normalizes_utf8_bom_and_newlines() -> None:
+    parsed = DocumentParser().parse(
+        "\ufeff# Security\r\n\r\n- SAML 2.0\r\n".encode(),
+        "knowledge.MD",
+    )
+
+    assert parsed.text == "# Security\n\n- SAML 2.0"
+    assert parsed.page_count is None
+    assert parsed.pdf is None
+    assert parsed.document_ir is None
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (b"\xff\xfeinvalid", "UTF-8"),
+        (b"# title\x00binary", "control characters"),
+    ],
+)
+def test_parse_markdown_rejects_invalid_text(content: bytes, message: str) -> None:
+    with pytest.raises(DocumentProcessingError, match=message):
+        DocumentParser().parse(content, "knowledge.markdown")
+
+
 def test_parse_rejects_unsupported_extension() -> None:
     with pytest.raises(UnsupportedDocumentError):
         DocumentParser().parse(b"plain text", "request.txt")

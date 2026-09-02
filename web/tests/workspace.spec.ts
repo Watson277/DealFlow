@@ -104,6 +104,22 @@ test("upload omits blank optional fields", async ({ page }) => {
   expect(state.lastUpload).not.toContain('name="reference_number"');
 });
 
+test("knowledge upload accepts Markdown while RFP remains PDF or DOCX", async ({ page }) => {
+  await mockWorkspace(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "新建 RFP", exact: true }).click();
+  await expect(page.locator('input[type="file"]')).toHaveAttribute("accept", ".pdf,.docx");
+  await page.getByRole("button", { name: "关闭表单" }).click();
+  await page.getByRole("button", { name: "企业知识库", exact: true }).click();
+  await page.getByRole("button", { name: "上传文档", exact: true }).click();
+  const knowledgeFile = page.locator('input[type="file"]');
+  await expect(knowledgeFile).toHaveAttribute(
+    "accept",
+    ".pdf,.docx,.md,.markdown,text/markdown",
+  );
+  await expect(page.getByText("支持 PDF、DOCX 或 Markdown，将被解析并写入向量库")).toBeVisible();
+});
+
 test("retry replaces failure state in the open detail", async ({ page }) => {
   await mockWorkspace(page, "FAILED");
   await page.goto("/");

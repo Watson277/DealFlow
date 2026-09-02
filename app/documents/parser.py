@@ -69,8 +69,12 @@ class DocumentParser:
                 parsed = self._parse_pdf(content, filename, document_id)
             elif extension == ".docx":
                 parsed = self._parse_docx(content)
+            elif extension in {".md", ".markdown"}:
+                parsed = self._parse_markdown(content)
             else:
-                raise UnsupportedDocumentError("only PDF and DOCX files are supported")
+                raise UnsupportedDocumentError(
+                    "only PDF, DOCX, and Markdown files are supported"
+                )
         except (UnsupportedDocumentError, DocumentProcessingError):
             raise
         except Exception as exc:
@@ -107,3 +111,16 @@ class DocumentParser:
                 if any(cells):
                     blocks.append("\t".join(cells))
         return ParsedDocument(text="\n".join(blocks), page_count=None)
+
+    @staticmethod
+    def _parse_markdown(content: bytes) -> ParsedDocument:
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise DocumentProcessingError("Markdown files must use UTF-8 encoding") from exc
+        if "\x00" in text or any(
+            ord(character) < 32 and character not in "\n\r\t" for character in text
+        ):
+            raise DocumentProcessingError("Markdown file contains unsupported control characters")
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+        return ParsedDocument(text=normalized, page_count=None)

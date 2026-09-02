@@ -1118,8 +1118,13 @@ function SidePanel({
               <label className="file-field">
                 <UploadCloud />
                 <strong>选择企业知识文档</strong>
-                <span>文档将被解析并写入向量库</span>
-                <input type="file" name="file" accept=".pdf,.docx" required />
+                <span>支持 PDF、DOCX 或 Markdown，将被解析并写入向量库</span>
+                <input
+                  type="file"
+                  name="file"
+                  accept=".pdf,.docx,.md,.markdown,text/markdown"
+                  required
+                />
               </label>
             </>
           )}
