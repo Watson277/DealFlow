@@ -115,7 +115,15 @@ class CapabilityProcessingService:
                     async with session.begin():
                         if await RFPRepository(session).get_active(event.rfp_id) is None:
                             return
-                    evidence = await self.vector_store.search(vector)
+                    query_text = (
+                        f"Category: {requirement.category}\n"
+                        f"Requirement: {requirement.text}"
+                    )
+                    evidence = await self.vector_store.search(
+                        vector,
+                        query_text=query_text,
+                        mode="hybrid",
+                    )
                     async with session.begin():
                         evidence = await expand_parent_evidence(
                             session,

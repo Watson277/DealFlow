@@ -37,9 +37,15 @@ class Settings(BaseSettings):
     kafka_capability_worker_group: str = "dealflow-capability-workers"
     kafka_proposal_worker_group: str = "dealflow-proposal-workers"
     qdrant_url: str = "http://localhost:6333"
-    qdrant_collection: str = "dealflow_knowledge_glm"
+    qdrant_collection: str = "dealflow_knowledge_v2"
     qdrant_search_top_k: int = 5
     qdrant_score_threshold: float | None = 0.25
+    qdrant_dense_vector_name: str = "dense"
+    qdrant_sparse_vector_name: str = "bm25"
+    qdrant_bm25_model: str = "qdrant/bm25"
+    qdrant_dense_prefetch_top_k: int = Field(default=40, ge=1)
+    qdrant_sparse_prefetch_top_k: int = Field(default=40, ge=1)
+    qdrant_hybrid_fusion_top_k: int = Field(default=30, ge=1)
 
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = Field(

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.rag.retrieval import expand_parent_evidence
+from app.rag.retrieval import expand_parent_evidence, group_child_evidence
 from app.rag.vector_store import RetrievedEvidence
 
 
@@ -63,7 +63,7 @@ async def test_parent_evidence_is_loaded_from_mysql_and_deduplicated(monkeypatch
             pass
 
         async def get_parents(self, parent_ids: list[str]) -> dict[str, object]:
-            assert parent_ids == ["parent-1", "parent-1"]
+            assert parent_ids == ["parent-1"]
             return {"parent-1": SimpleNamespace(text="Complete authentication section.")}
 
     monkeypatch.setattr("app.rag.retrieval.DocumentRepository", FakeDocumentRepository)
@@ -109,3 +109,33 @@ async def test_missing_parent_keeps_child_for_backward_compatibility(monkeypatch
 
     assert expanded[0].text == "Legacy child text."
     assert expanded[0].matched_child_text is None
+
+
+def test_child_evidence_grouping_keeps_best_ranked_hit_per_parent() -> None:
+    evidence = [
+        _evidence(
+            point_id="best-child",
+            document_id="document-1",
+            parent_id="parent-1",
+            text="Best matching passage.",
+            score=0.95,
+        ),
+        _evidence(
+            point_id="second-child",
+            document_id="document-1",
+            parent_id="parent-1",
+            text="Another passage from the same parent.",
+            score=0.90,
+        ),
+        _evidence(
+            point_id="other-parent-child",
+            document_id="document-1",
+            parent_id="parent-2",
+            text="A different parent.",
+            score=0.85,
+        ),
+    ]
+
+    grouped = group_child_evidence(evidence)
+
+    assert [item.point_id for item in grouped] == ["best-child", "other-parent-child"]

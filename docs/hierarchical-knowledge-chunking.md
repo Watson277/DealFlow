@@ -72,12 +72,14 @@ Document 的 `extra_data` 会记录：
 
 MySQL 的 `knowledge_chunks` 表保存 Parent 正文、来源位置、章节路径、`char_count`、`token_count` 和内容哈希。Qdrant 只为 Child 保存向量，Child payload 保存 `parent_id`、`token_count`、`embedding_token_count` 和自身来源信息，不复制 Parent 正文。
 
-检索时先扩大 Child 候选范围，再批量用 `parent_id` 从 MySQL 加载 Parent，按 `document_id + parent_id` 去重，最后把 Parent 上下文交给 Capability Agent；`matched_child_text` 仍被保留用于解释命中原因。旧索引没有对应 Parent 记录时继续返回 Child，确保迁移期间兼容。
+检索时通过 Dense 与 BM25 两路召回 Child，由 RRF 融合候选；再按 `document_id + parent_id` 去重，批量从 MySQL 加载 Parent，最后把 Parent 上下文交给 Capability Agent。`matched_child_text` 保留融合排名最高的 Child，用于解释命中原因。旧索引没有对应 Parent 记录时继续返回 Child，确保迁移期间兼容。
 
 ```text
 需求向量
-  → Child 候选召回
-  → 活跃知识文档过滤
+  → Qdrant ACTIVE 预过滤
+  → Dense + BM25 Child 候选召回
+  → RRF 融合
+  → MySQL READY 一致性校验
   → MySQL 批量加载 Parent
   → 按 Parent 去重并展开
   → Capability 判断

@@ -1,0 +1,39 @@
+{
+  "dataset": "evals/retrieval/sample_queries.jsonl",
+  "knowledge_fixture": "evals/retrieval/enterprise_knowledge.md",
+  "collection": "dealflow_knowledge_v2",
+  "embedding_model": "embedding-3",
+  "top_k": 5,
+  "dense": {
+    "query_count": 8,
+    "hit_rate": 1.0,
+    "mean_reciprocal_rank": 0.9166666666666666,
+    "mean_recall": 1.0,
+    "first_relevant_ranks": {
+      "identity-saml": 1,
+      "identity-scim": 1,
+      "audit-retention": 1,
+      "compliance-certification": 1,
+      "dr-objectives": 1,
+      "availability-sla": 1,
+      "on-premises": 3,
+      "support-p1": 1
+    }
+  },
+  "hybrid": {
+    "query_count": 8,
+    "hit_rate": 1.0,
+    "mean_reciprocal_rank": 1.0,
+    "mean_recall": 1.0,
+    "first_relevant_ranks": {
+      "identity-saml": 1,
+      "identity-scim": 1,
+      "audit-retention": 1,
+      "compliance-certification": 1,
+      "dr-objectives": 1,
+      "availability-sla": 1,
+      "on-premises": 1,
+      "support-p1": 1
+    }
+  }
+}
