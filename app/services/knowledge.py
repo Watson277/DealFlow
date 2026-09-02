@@ -19,7 +19,15 @@ from app.models.enums import DocumentStatus, DocumentType
 from app.models.mixins import generate_uuid, utc_now
 from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import EmbeddingService
-from app.rag.markdown import MarkdownKnowledgeChunker
+from app.rag.hierarchical import (
+    KNOWLEDGE_CHUNK_CONTENT_TYPE,
+    DocxStructureAdapter,
+    HierarchicalKnowledgeChunker,
+    MarkdownStructureAdapter,
+    PDFStructureAdapter,
+    knowledge_chunk_object_key,
+    serialize_knowledge_chunks,
+)
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.repositories import DocumentRepository
 
@@ -81,6 +89,7 @@ class KnowledgeService:
         )
         parsed_object_key: str | None = None
         parsed_ir_object_key: str | None = None
+        chunks_object_key: str | None = None
         try:
             async with self.session.begin():
                 DocumentRepository(self.session).add(document)
@@ -107,22 +116,47 @@ class KnowledgeService:
                     content_type=DOCUMENT_IR_CONTENT_TYPE,
                 )
             source_extension = Path(stored.original_filename).suffix.lower()
-            if source_extension in {".md", ".markdown"}:
-                chunks = MarkdownKnowledgeChunker(self.vector_store.settings).split(
+            if parsed.document_ir is not None:
+                structural_document = PDFStructureAdapter.convert(
+                    parsed.document_ir,
+                    document_id=document_id,
+                    title=title,
+                    version=version,
+                )
+            elif source_extension in {".md", ".markdown"}:
+                structural_document = MarkdownStructureAdapter.convert(
                     parsed.text,
-                    document_title=title,
-                    document_version=version,
+                    document_id=document_id,
+                    title=title,
+                    version=version,
                 )
             else:
-                chunks = self.chunker.split(parsed.text)
-            vectors = await self.embeddings.embed([chunk.text for chunk in chunks])
+                structural_document = DocxStructureAdapter.convert(
+                    parsed.text,
+                    document_id=document_id,
+                    title=title,
+                    version=version,
+                )
+            bundle = HierarchicalKnowledgeChunker(self.vector_store.settings).split(
+                structural_document
+            )
+            chunks_object_key = knowledge_chunk_object_key(document_id)
+            await self.storage.upload_text(
+                chunks_object_key,
+                serialize_knowledge_chunks(bundle),
+                content_type=KNOWLEDGE_CHUNK_CONTENT_TYPE,
+            )
+            vectors = await self.embeddings.embed(
+                [chunk.embedding_text for chunk in bundle.children]
+            )
             point_ids = await self.vector_store.index_document(
                 document_id=document_id,
                 title=title.strip(),
                 version=version,
                 category=category.strip().lower(),
-                chunks=chunks,
+                chunks=bundle.children,
                 vectors=vectors,
+                parents={parent.chunk_id: parent for parent in bundle.parents},
             )
             async with self.session.begin():
                 persisted = await DocumentRepository(self.session).get(document_id)
@@ -136,10 +170,19 @@ class KnowledgeService:
                     **persisted.extra_data,
                     "qdrant_collection": self.vector_store.settings.qdrant_collection,
                     "qdrant_point_count": len(point_ids),
+                    "chunks_object_key": chunks_object_key,
+                    "parent_chunk_count": len(bundle.parents),
+                    "child_chunk_count": len(bundle.children),
+                    "chunk_schema_version": bundle.schema_version,
                 }
                 document = persisted
         except Exception:
-            await self._mark_failed(document_id, parsed_object_key, parsed_ir_object_key)
+            await self._mark_failed(
+                document_id,
+                parsed_object_key,
+                parsed_ir_object_key,
+                chunks_object_key,
+            )
             with suppress(Exception):
                 await self.vector_store.delete_document(document_id)
             raise
@@ -183,6 +226,7 @@ class KnowledgeService:
         document_id: str,
         parsed_object_key: str | None,
         parsed_ir_object_key: str | None,
+        chunks_object_key: str | None,
     ) -> None:
         try:
             async with self.session.begin():
@@ -191,5 +235,10 @@ class KnowledgeService:
                     document.status = DocumentStatus.FAILED.value
                     document.parsed_text_object_key = parsed_object_key
                     document.parsed_ir_object_key = parsed_ir_object_key
+                    if chunks_object_key is not None:
+                        document.extra_data = {
+                            **document.extra_data,
+                            "chunks_object_key": chunks_object_key,
+                        }
         except Exception:
             pass

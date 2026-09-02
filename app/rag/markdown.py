@@ -29,6 +29,8 @@ class MarkdownUnit:
     section_path: tuple[str, ...]
     block_type: str
     block_id: str
+    line_start: int
+    line_end: int
     atomic: bool = False
 
 
@@ -96,6 +98,8 @@ class MarkdownKnowledgeChunker:
                         dict.fromkeys((pending.block_type, unit.block_type))
                     ),
                     block_id="+".join((pending.block_id, unit.block_id)),
+                    line_start=pending.line_start,
+                    line_end=unit.line_end,
                 )
             else:
                 grouped.append(pending)
@@ -215,11 +219,20 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
     headings: dict[int, str] = {}
     buffered: list[str] = []
     buffered_type = "text"
+    buffered_start: int | None = None
+    buffered_end: int | None = None
 
     def section_path() -> tuple[str, ...]:
         return tuple(headings[level] for level in sorted(headings))
 
-    def add_unit(content: str, block_type: str, *, atomic: bool = False) -> None:
+    def add_unit(
+        content: str,
+        block_type: str,
+        *,
+        line_start: int,
+        line_end: int,
+        atomic: bool = False,
+    ) -> None:
         normalized = content.strip()
         if not normalized:
             return
@@ -229,16 +242,25 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
                 section_path=section_path(),
                 block_type=block_type,
                 block_id=f"md_b{len(units) + 1:04d}",
+                line_start=line_start,
+                line_end=line_end,
                 atomic=atomic,
             )
         )
 
     def flush() -> None:
-        nonlocal buffered, buffered_type
-        if buffered:
-            add_unit("\n".join(buffered), buffered_type)
+        nonlocal buffered, buffered_type, buffered_start, buffered_end
+        if buffered and buffered_start is not None and buffered_end is not None:
+            add_unit(
+                "\n".join(buffered),
+                buffered_type,
+                line_start=buffered_start,
+                line_end=buffered_end,
+            )
         buffered = []
         buffered_type = "text"
+        buffered_start = None
+        buffered_end = None
 
     def set_heading(level: int, value: str) -> None:
         heading = _strip_inline_heading_closer(value)
@@ -255,6 +277,7 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
         fence_match = _FENCE_START.match(line)
         if fence_match:
             flush()
+            start_line = index + 1
             fence = fence_match.group(1)
             code_lines = [line]
             index += 1
@@ -267,7 +290,13 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
                 index += 1
                 if is_closing:
                     break
-            add_unit("\n".join(code_lines), "code", atomic=True)
+            add_unit(
+                "\n".join(code_lines),
+                "code",
+                line_start=start_line,
+                line_end=index,
+                atomic=True,
+            )
             continue
 
         heading_match = _ATX_HEADING.match(line)
@@ -287,12 +316,19 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
 
         if _starts_markdown_table(lines, index):
             flush()
+            start_line = index + 1
             table_lines = [line, lines[index + 1]]
             index += 2
             while index < len(lines) and lines[index].strip() and "|" in lines[index]:
                 table_lines.append(lines[index])
                 index += 1
-            add_unit("\n".join(table_lines), "table", atomic=True)
+            add_unit(
+                "\n".join(table_lines),
+                "table",
+                line_start=start_line,
+                line_end=index,
+                atomic=True,
+            )
             continue
 
         if not line.strip():
@@ -308,6 +344,9 @@ def parse_markdown_units(text: str) -> list[MarkdownUnit]:
         line_type = "list" if _LIST_ITEM.match(line) else "text"
         if buffered and line_type != buffered_type:
             flush()
+        if buffered_start is None:
+            buffered_start = index + 1
+        buffered_end = index + 1
         buffered_type = line_type
         buffered.append(line)
         index += 1
