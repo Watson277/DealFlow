@@ -29,7 +29,7 @@ from app.rag.hierarchical import (
     serialize_knowledge_chunks,
 )
 from app.rag.vector_store import QdrantKnowledgeStore
-from app.repositories import DocumentRepository
+from app.repositories import DocumentRepository, KnowledgeChunkRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,12 +156,15 @@ class KnowledgeService:
                 category=category.strip().lower(),
                 chunks=bundle.children,
                 vectors=vectors,
-                parents={parent.chunk_id: parent for parent in bundle.parents},
             )
             async with self.session.begin():
                 persisted = await DocumentRepository(self.session).get(document_id)
                 if persisted is None:
                     raise KnowledgeIndexError("knowledge document disappeared during indexing")
+                await KnowledgeChunkRepository(self.session).replace_parents(
+                    document_id,
+                    bundle.parents,
+                )
                 persisted.status = DocumentStatus.READY.value
                 persisted.page_count = parsed.page_count
                 persisted.parsed_text_object_key = parsed_object_key

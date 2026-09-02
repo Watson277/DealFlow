@@ -9,7 +9,7 @@ from app.rag.hierarchical import (
 from app.rag.vector_store import QdrantKnowledgeStore
 
 
-async def test_vector_search_expands_child_to_parent_and_deduplicates(monkeypatch) -> None:
+async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) -> None:
     client = AsyncQdrantClient(":memory:")
     monkeypatch.setattr("app.rag.vector_store.AsyncQdrantClient", lambda **kwargs: client)
     store = QdrantKnowledgeStore(
@@ -72,16 +72,24 @@ async def test_vector_search_expands_child_to_parent_and_deduplicates(monkeypatc
             category="security",
             chunks=children,
             vectors=[[1.0, 0.0], [0.95, 0.05]],
-            parents={parent.chunk_id: parent},
         )
 
         evidence = await store.search([1.0, 0.0])
 
-        assert len(evidence) == 1
-        assert evidence[0].text == parent.text
-        assert evidence[0].matched_child_text == children[0].text
+        assert len(evidence) == 2
+        assert evidence[0].text == children[0].text
+        assert evidence[0].matched_child_text is None
         assert evidence[0].parent_id == parent.chunk_id
         assert evidence[0].source_type == "markdown"
         assert evidence[0].location == location.model_dump(mode="json")
+        points, _ = await client.scroll(
+            collection_name=store.settings.qdrant_collection,
+            limit=10,
+            with_payload=True,
+            with_vectors=False,
+        )
+        assert points
+        assert all("parent_text" not in (point.payload or {}) for point in points)
+        assert all((point.payload or {}).get("chunk_level") == "child" for point in points)
     finally:
         await store.close()

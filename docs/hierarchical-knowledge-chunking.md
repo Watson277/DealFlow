@@ -67,15 +67,17 @@ Document 的 `extra_data` 会记录：
 - `child_chunk_count`；
 - `qdrant_point_count`。
 
-Qdrant 只为 Child 保存向量。Child payload 同时保存 `parent_id`、来源位置和 Parent 正文。检索时扩大候选范围，按 `document_id + parent_id` 去重，然后把命中的 Child 展开为 Parent 上下文交给 Capability Agent；`matched_child_text` 仍被保留用于解释命中原因。
+MySQL 的 `knowledge_chunks` 表保存 Parent 正文、来源位置、章节路径和内容哈希。Qdrant 只为 Child 保存向量，Child payload 保存 `parent_id` 和自身来源信息，不复制 Parent 正文。
+
+检索时先扩大 Child 候选范围，再批量用 `parent_id` 从 MySQL 加载 Parent，按 `document_id + parent_id` 去重，最后把 Parent 上下文交给 Capability Agent；`matched_child_text` 仍被保留用于解释命中原因。旧索引没有对应 Parent 记录时继续返回 Child，确保迁移期间兼容。
 
 ```text
 需求向量
   → Child 候选召回
-  → 按 Parent 去重
-  → Child 展开为 Parent
   → 活跃知识文档过滤
+  → MySQL 批量加载 Parent
+  → 按 Parent 去重并展开
   → Capability 判断
 ```
 
-当前 Parent 正文随 Child payload 保存，避免检索阶段额外访问 MySQL 或 MinIO。若未来文档规模显著增大，可把 Parent 正文迁移到独立数据库表或缓存中，Qdrant payload 只保留 `parent_id`。
+MinIO 中的 `knowledge-chunks.v1.json` 是完整、可重建的处理产物；MySQL Parent 是在线检索数据；Qdrant Child 是语义索引。三者分别承担归档重建、上下文读取和向量召回职责。

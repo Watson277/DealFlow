@@ -20,6 +20,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.capability import CapabilityEvidence
+    from app.models.knowledge_chunk import KnowledgeChunkRecord
     from app.models.requirement import Requirement
     from app.models.rfp import RFP
     from app.models.user import User
@@ -69,6 +70,10 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     uploaded_by: Mapped[User | None] = relationship(foreign_keys=[uploaded_by_id])
     requirements: Mapped[list[Requirement]] = relationship(back_populates="source_document")
     evidence_items: Mapped[list[CapabilityEvidence]] = relationship(back_populates="document")
+    knowledge_chunks: Mapped[list[KnowledgeChunkRecord]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def is_knowledge_document(self) -> bool:

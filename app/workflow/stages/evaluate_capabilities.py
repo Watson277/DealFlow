@@ -25,11 +25,11 @@ from app.models import (
 from app.models.enums import CapabilityStatus, OutboxStatus, RFPStatus, WorkflowStatus
 from app.models.mixins import generate_uuid, utc_now
 from app.rag.embedding import EmbeddingService
+from app.rag.retrieval import expand_parent_evidence
 from app.rag.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 from app.repositories import (
     CapabilityEvidenceRepository,
     CapabilityResultRepository,
-    DocumentRepository,
     OutboxEventRepository,
     RequirementRepository,
     RFPRepository,
@@ -117,10 +117,11 @@ class CapabilityProcessingService:
                             return
                     evidence = await self.vector_store.search(vector)
                     async with session.begin():
-                        active_ids = await DocumentRepository(session).active_knowledge_ids(
-                            [item.document_id for item in evidence]
+                        evidence = await expand_parent_evidence(
+                            session,
+                            evidence,
+                            limit=self.settings.qdrant_search_top_k,
                         )
-                    evidence = [item for item in evidence if item.document_id in active_ids]
                     judgment = (
                         await self.judge.judge(requirement, evidence)
                         if evidence

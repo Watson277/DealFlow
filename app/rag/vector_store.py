@@ -16,7 +16,7 @@ from qdrant_client.models import (
 from app.core.config import Settings
 from app.core.exceptions import KnowledgeIndexError
 from app.rag.chunking import KnowledgeChunk
-from app.rag.hierarchical import ChildChunk, ParentChunk, PDFSourceLocation
+from app.rag.hierarchical import ChildChunk, PDFSourceLocation
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +66,6 @@ class QdrantKnowledgeStore:
         category: str,
         chunks: Sequence[KnowledgeChunk | ChildChunk],
         vectors: list[list[float]],
-        parents: dict[str, ParentChunk] | None = None,
     ) -> list[str]:
         if len(chunks) != len(vectors):
             raise KnowledgeIndexError("knowledge chunks and embeddings do not align")
@@ -92,8 +91,6 @@ class QdrantKnowledgeStore:
                     else None
                 )
                 source_block_ids = chunk.source_node_ids
-                parent = parents.get(chunk.parent_id) if parents is not None else None
-                parent_text = parent.text if parent is not None else None
                 source_type = chunk.location.source_type
                 chunk_id = chunk.chunk_id
                 section_path = chunk.section_path
@@ -108,7 +105,6 @@ class QdrantKnowledgeStore:
                 page = chunk.page_number
                 page_end = getattr(chunk, "page_end", page)
                 source_block_ids = getattr(chunk, "source_block_ids", ())
-                parent_text = None
                 source_type = None
                 chunk_id = point_id
                 section_path = getattr(chunk, "section_path", ())
@@ -132,7 +128,6 @@ class QdrantKnowledgeStore:
                         "block_types": list(block_types),
                         "source_block_ids": list(source_block_ids),
                         "parent_id": parent_id,
-                        "parent_text": parent_text,
                         "source_type": source_type,
                         "location": location,
                         "category": category,
@@ -171,7 +166,6 @@ class QdrantKnowledgeStore:
             score_threshold=self.settings.qdrant_score_threshold,
         )
         evidence: list[RetrievedEvidence] = []
-        expanded_parents: set[tuple[str, str]] = set()
         for point in response.points:
             payload: dict[str, Any] = dict(point.payload or {})
             document_id = payload.get("document_id")
@@ -184,16 +178,9 @@ class QdrantKnowledgeStore:
             block_types = payload.get("block_types")
             source_block_ids = payload.get("source_block_ids")
             parent_id = payload.get("parent_id")
-            parent_text = payload.get("parent_text")
             chunk_id = payload.get("chunk_id")
             source_type = payload.get("source_type")
             location = payload.get("location")
-            if isinstance(parent_id, str):
-                parent_key = (document_id, parent_id)
-                if parent_key in expanded_parents:
-                    continue
-                expanded_parents.add(parent_key)
-            expanded_text = parent_text if isinstance(parent_text, str) else text
             evidence.append(
                 RetrievedEvidence(
                     point_id=str(point.id),
@@ -202,7 +189,7 @@ class QdrantKnowledgeStore:
                     version=str(payload["version"]) if payload.get("version") else None,
                     category=str(payload.get("category") or "general"),
                     page_number=page if isinstance(page, int) else None,
-                    text=expanded_text,
+                    text=text,
                     score=float(point.score),
                     page_end=page_end if isinstance(page_end, int) else None,
                     section_path=(
@@ -222,13 +209,10 @@ class QdrantKnowledgeStore:
                     ),
                     parent_id=parent_id if isinstance(parent_id, str) else None,
                     chunk_id=chunk_id if isinstance(chunk_id, str) else None,
-                    matched_child_text=text if expanded_text != text else None,
                     source_type=source_type if isinstance(source_type, str) else None,
                     location=location if isinstance(location, dict) else None,
                 )
             )
-            if len(evidence) >= result_limit:
-                break
         return evidence
 
     async def delete_document(

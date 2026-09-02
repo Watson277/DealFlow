@@ -4,6 +4,7 @@ from app.db.base import Base
 from app.models.capability import CapabilityEvidence, CapabilityResult
 from app.models.customer import Customer
 from app.models.document import Document
+from app.models.knowledge_chunk import KnowledgeChunkRecord
 from app.models.outbox import OutboxEvent
 from app.models.proposal import Proposal, ProposalReview
 from app.models.requirement import Requirement
@@ -17,6 +18,7 @@ __all__ = [
     "CapabilityResult",
     "Customer",
     "Document",
+    "KnowledgeChunkRecord",
     "OutboxEvent",
     "Proposal",
     "ProposalReview",
