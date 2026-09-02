@@ -25,7 +25,7 @@ DOCX text ────── DocxStructureAdapter ─────┘  Hierarchic
 - Markdown：`line_start`、`line_end`、`block_ids`；
 - DOCX：`paragraph_start`、`paragraph_end`、`block_ids`。
 
-每个 Parent 包含完整章节上下文，每个 Child 通过 `parent_id` 指向唯一 Parent。ID 使用 `document_id + section_path + sequence` 生成确定性 UUID，不会因不同文档存在同名章节而冲突。
+每个 Parent 包含完整章节上下文，每个 Child 通过 `parent_id` 指向唯一 Parent。Parent ID 使用 `document_id + stable structural anchor` 生成确定性 UUID；结构锚点由章节路径、Block 类型和 Parent 内容哈希组成，不包含全局 `parent_order`。因此在前方插入不相关 Parent 时，后续未变化 Parent 的 ID 保持稳定；`parent_order` 只负责排序。完全相同且处于同一章节的重复 Parent 使用该锚点内的局部 occurrence 区分。
 
 原始展示文本和向量文本分开保存：
 

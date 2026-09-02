@@ -180,6 +180,58 @@ def test_parent_ids_are_scoped_to_document() -> None:
     assert first_parent.chunk_id != second_parent.chunk_id
 
 
+def test_inserting_parent_before_existing_content_preserves_parent_ids() -> None:
+    document_id = str(uuid4())
+    original = MarkdownStructureAdapter.convert(
+        "# Identity\n\nSAML is supported.\n\n# Audit\n\nLogs are retained for 180 days.",
+        document_id=document_id,
+        title=None,
+        version=None,
+    )
+    updated = MarkdownStructureAdapter.convert(
+        "# Overview\n\nEnterprise platform.\n\n"
+        "# Identity\n\nSAML is supported.\n\n"
+        "# Audit\n\nLogs are retained for 180 days.",
+        document_id=document_id,
+        title=None,
+        version=None,
+    )
+    chunker = HierarchicalKnowledgeChunker(_settings())
+
+    original_bundle = chunker.split(original)
+    updated_bundle = chunker.split(updated)
+    original_parents = {parent.text: parent for parent in original_bundle.parents}
+    updated_parents = {parent.text: parent for parent in updated_bundle.parents}
+
+    for text, original_parent in original_parents.items():
+        updated_parent = updated_parents[text]
+        assert updated_parent.chunk_id == original_parent.chunk_id
+        assert updated_parent.order == original_parent.order + 1
+
+    original_children = {child.text: child for child in original_bundle.children}
+    updated_children = {child.text: child for child in updated_bundle.children}
+    for text, original_child in original_children.items():
+        updated_child = updated_children[text]
+        assert updated_child.chunk_id == original_child.chunk_id
+        assert updated_child.parent_id == original_child.parent_id
+
+
+def test_identical_parents_in_same_section_receive_distinct_ids() -> None:
+    repeated_table = "| Product | Support |\n| --- | --- |\n| Core | Yes |"
+    document = MarkdownStructureAdapter.convert(
+        f"# Products\n\n{repeated_table}\n\n{repeated_table}",
+        document_id=str(uuid4()),
+        title=None,
+        version=None,
+    )
+
+    parents = HierarchicalKnowledgeChunker(_settings()).split(document).parents
+
+    assert len(parents) == 2
+    assert parents[0].text == parents[1].text
+    assert parents[0].chunk_id != parents[1].chunk_id
+
+
 def test_chunk_bundle_json_round_trips() -> None:
     document = MarkdownStructureAdapter.convert(
         "# Security\n\nAudit logs are retained.",

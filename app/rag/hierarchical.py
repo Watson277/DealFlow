@@ -371,8 +371,18 @@ class HierarchicalKnowledgeChunker:
         drafts = self._parent_drafts(document.nodes)
         parents: list[ParentChunk] = []
         children: list[ChildChunk] = []
+        anchor_occurrences: dict[str, int] = {}
         for parent_order, draft in enumerate(drafts):
-            parent = self._parent(document, draft, parent_order)
+            anchor = self._parent_anchor(document, draft)
+            anchor_occurrence = anchor_occurrences.get(anchor, 0)
+            anchor_occurrences[anchor] = anchor_occurrence + 1
+            parent = self._parent(
+                document,
+                draft,
+                parent_order,
+                anchor=anchor,
+                anchor_occurrence=anchor_occurrence,
+            )
             parents.append(parent)
             child_content_budget = self._child_content_budget(document, parent.section_path)
             for child_order, (text, nodes) in enumerate(
@@ -450,10 +460,16 @@ class HierarchicalKnowledgeChunker:
         document: StructuralDocument,
         draft: _ParentDraft,
         order: int,
+        *,
+        anchor: str,
+        anchor_occurrence: int,
     ) -> ParentChunk:
         text = draft.text.strip()
         section_path = draft.nodes[0].section_path
-        identity = f"dealflow:{document.document_id}:parent:{order}:{' > '.join(section_path)}"
+        identity = (
+            f"dealflow:{document.document_id}:parent:{anchor}:"
+            f"occurrence:{anchor_occurrence}"
+        )
         return ParentChunk(
             chunk_id=str(uuid5(NAMESPACE_URL, identity)),
             document_id=document.document_id,
@@ -471,6 +487,23 @@ class HierarchicalKnowledgeChunker:
             token_count=self.tokens.count(text),
             content_hash=_content_hash(text),
         )
+
+    @staticmethod
+    def _parent_anchor(document: StructuralDocument, draft: _ParentDraft) -> str:
+        """Build an order-independent identity anchor for one Parent chunk."""
+
+        text = draft.text.strip()
+        section_path = draft.nodes[0].section_path
+        block_types = _ordered_unique(tuple(node.node_type for node in draft.nodes))
+        anchor_material = "\x1f".join(
+            (
+                document.source_type,
+                "\x1e".join(section_path),
+                "\x1e".join(block_types),
+                _content_hash(text),
+            )
+        )
+        return hashlib.sha256(anchor_material.encode("utf-8")).hexdigest()
 
     def _child_content_budget(
         self,
