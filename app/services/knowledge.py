@@ -279,12 +279,24 @@ class KnowledgeService:
                 raise KnowledgeNotFoundError("知识库文档不存在或已删除")
             if document.status in {DocumentStatus.INDEXING.value, DocumentStatus.PARSING.value}:
                 raise DeletionConflictError("文档正在解析或索引，请处理完成后再删除")
-            collection = document.extra_data.get("qdrant_collection")
-            try:
-                await self.vector_store.delete_document(
-                    document_id,
-                    collection_name=collection if isinstance(collection, str) else None,
+            stored_collection = document.extra_data.get("qdrant_collection")
+            current_collection = self.vector_store.settings.qdrant_collection
+            collections = tuple(
+                dict.fromkeys(
+                    collection
+                    for collection in (
+                        stored_collection if isinstance(stored_collection, str) else None,
+                        current_collection,
+                    )
+                    if collection
                 )
+            )
+            try:
+                for collection in collections:
+                    await self.vector_store.delete_document(
+                        document_id,
+                        collection_name=collection,
+                    )
             except Exception as exc:
                 raise KnowledgeIndexError("知识库索引删除失败，请稍后重试；文档尚未删除") from exc
             document.status = DocumentStatus.ARCHIVED.value
@@ -293,6 +305,7 @@ class KnowledgeService:
                 "knowledge_status": "DELETED",
                 "deleted_at": utc_now().isoformat(),
                 "qdrant_point_count": 0,
+                "qdrant_deleted_collections": list(collections),
             }
 
     async def _mark_failed(

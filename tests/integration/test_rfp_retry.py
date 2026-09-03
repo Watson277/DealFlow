@@ -3,7 +3,7 @@ import json
 import os
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 from uuid import uuid4
 
 import pytest
@@ -504,6 +504,7 @@ async def test_knowledge_deletion_is_scoped_and_preserves_files(
     vector_store = SimpleNamespace(
         delete_document=AsyncMock(side_effect=RuntimeError("private") if vector_failure else None),
         close=AsyncMock(),
+        settings=SimpleNamespace(qdrant_collection="current-collection"),
     )
     async with AsyncClient(
         transport=ASGITransport(deletion_app(state, vector_store)), base_url="http://test"
@@ -519,10 +520,15 @@ async def test_knowledge_deletion_is_scoped_and_preserves_files(
             assert "private" not in response.text
     if index_status == "INDEXING":
         vector_store.delete_document.assert_not_awaited()
-    else:
+    elif vector_failure:
         vector_store.delete_document.assert_awaited_once_with(
             state.document_id, collection_name="original-collection"
         )
+    else:
+        assert vector_store.delete_document.await_args_list == [
+            call(state.document_id, collection_name="original-collection"),
+            call(state.document_id, collection_name="current-collection"),
+        ]
     async with state.factory() as session:
         document = await session.get(Document, state.document_id)
         assert document.status == ("ARCHIVED" if expected == 204 else index_status)
@@ -530,6 +536,11 @@ async def test_knowledge_deletion_is_scoped_and_preserves_files(
         assert document.extra_data["knowledge_status"] == (
             "DELETED" if expected == 204 else "ACTIVE"
         )
+        if expected == 204:
+            assert document.extra_data["qdrant_deleted_collections"] == [
+                "original-collection",
+                "current-collection",
+            ]
 
 
 async def test_delete_missing_and_invalid_targets_has_no_side_effects(retry_state):
