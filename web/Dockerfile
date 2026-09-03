@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 
 WORKDIR /web
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,id=dealflow-npm,target=/root/.npm,sharing=locked npm ci
 COPY . .
 RUN npm run build
 

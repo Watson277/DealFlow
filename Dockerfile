@@ -12,7 +12,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN sed -i \
+RUN --mount=type=cache,id=dealflow-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=dealflow-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && sed -i \
         -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
         -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
         /etc/apt/sources.list.d/debian.sources \
@@ -21,11 +24,11 @@ RUN sed -i \
         --yes --no-install-recommends \
         tesseract-ocr \
         tesseract-ocr-chi-sim \
-        tesseract-ocr-eng \
-    && rm -rf /var/lib/apt/lists/*
+        tesseract-ocr-eng
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --extra local-embeddings
+RUN --mount=type=cache,id=dealflow-uv,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-dev --no-install-project --extra local-embeddings
 
 COPY alembic.ini ./
 COPY alembic ./alembic
