@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
+import { FileDropField } from "./FileDropField";
 import { MarkdownPreview } from "./MarkdownPreview";
 import type {
   Capability,
@@ -1093,12 +1094,13 @@ function SidePanel({
                   <input type="datetime-local" name="due_at" />
                 </label>
               </div>
-              <label className="file-field">
-                <UploadCloud />
-                <strong>选择 RFP 文档</strong>
-                <span>支持 PDF 或 DOCX，最大 50 MB</span>
-                <input type="file" name="file" accept=".pdf,.docx" required />
-              </label>
+              <FileDropField
+                id="rfp-file"
+                title="选择 RFP 文档"
+                help="支持 PDF 或 DOCX，最大 50 MB"
+                accept=".pdf,.docx"
+                allowedExtensions={[".pdf", ".docx"]}
+              />
             </>
           )}
           {panel === "knowledge" && (
@@ -1115,17 +1117,13 @@ function SidePanel({
                 版本
                 <input name="version" />
               </label>
-              <label className="file-field">
-                <UploadCloud />
-                <strong>选择企业知识文档</strong>
-                <span>支持 PDF、DOCX 或 Markdown，将被解析并写入向量库</span>
-                <input
-                  type="file"
-                  name="file"
-                  accept=".pdf,.docx,.md,.markdown,text/markdown"
-                  required
-                />
-              </label>
+              <FileDropField
+                id="knowledge-file"
+                title="选择企业知识文档"
+                help="支持 PDF、DOCX 或 Markdown，将被解析并写入向量库"
+                accept=".pdf,.docx,.md,.markdown,text/markdown"
+                allowedExtensions={[".pdf", ".docx", ".md", ".markdown"]}
+              />
             </>
           )}
           {panel === "customer" && (

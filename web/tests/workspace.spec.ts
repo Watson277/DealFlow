@@ -1,11 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const rfpId = "11111111-1111-4111-8111-111111111111";
 const customerId = "22222222-2222-4222-8222-222222222222";
 const proposalId = "33333333-3333-4333-8333-333333333333";
 
 async function mockWorkspace(page: Page, initial = "REVIEW_PENDING", empty = false) {
-  const state = { status: initial, lastUpload: "", customerError: false,
+  const state = { status: initial, lastUpload: "", lastKnowledgeUpload: "", customerError: false,
     markdown: "# 验证方案\n\n已生成的方案内容",
     rfpDeleted: false, customerDeleted: false, knowledgeVisible: false,
     knowledgeDeleteError: false, deleteCalls: [] as string[] };
@@ -40,6 +40,10 @@ async function mockWorkspace(page: Page, initial = "REVIEW_PENDING", empty = fal
         state.lastUpload = request.postData() || "";
         return reply({}, 202);
       }
+      if (path === "/knowledge") {
+        state.lastKnowledgeUpload = request.postData() || "";
+        return reply({});
+      }
       if (path === "/customers") return reply({ detail: [
         { loc: ["body", "name"], msg: "名称不符合要求" },
       ] }, 422);
@@ -65,6 +69,25 @@ async function mockWorkspace(page: Page, initial = "REVIEW_PENDING", empty = fal
     return reply({ items: [], total: 0 });
   });
   return state;
+}
+
+async function dispatchFileDrag(
+  target: Locator,
+  type: "dragenter" | "drop",
+  file: { name: string; mimeType: string; content: string },
+) {
+  await target.evaluate(
+    (element, args) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([args.file.content], args.file.name, { type: args.file.mimeType }),
+      );
+      element.dispatchEvent(
+        new DragEvent(args.type, { bubbles: true, cancelable: true, dataTransfer: transfer }),
+      );
+    },
+    { type, file },
+  );
 }
 
 test("empty workspace has no example cards or prefilled values", async ({ page }) => {
@@ -118,6 +141,60 @@ test("knowledge upload accepts Markdown while RFP remains PDF or DOCX", async ({
     ".pdf,.docx,.md,.markdown,text/markdown",
   );
   await expect(page.getByText("支持 PDF、DOCX 或 Markdown，将被解析并写入向量库")).toBeVisible();
+});
+
+test("RFP can be added by dragging a file", async ({ page }) => {
+  const state = await mockWorkspace(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "新建 RFP", exact: true }).click();
+  await page.locator('select[name="customer_id"]').selectOption(customerId);
+  await page.getByLabel("RFP 标题", { exact: true }).fill("拖拽上传检查");
+  const dropZone = page.getByTestId("rfp-file-drop-zone");
+  const file = { name: "dragged-rfp.pdf", mimeType: "application/pdf", content: "rfp" };
+  await dispatchFileDrag(dropZone, "dragenter", file);
+  await expect(dropZone).toHaveClass(/drag-active/);
+  await dispatchFileDrag(dropZone, "drop", file);
+  await expect(dropZone).not.toHaveClass(/drag-active/);
+  await expect(dropZone.getByText("dragged-rfp.pdf", { exact: true })).toBeVisible();
+  expect(
+    await page
+      .getByLabel("选择 RFP 文档")
+      .evaluate((input: HTMLInputElement) => input.files?.length),
+  ).toBe(1);
+  await page.getByRole("button", { name: "确认提交" }).click();
+  await expect(page.getByText("RFP 已进入处理队列")).toBeVisible();
+  expect(state.lastUpload).toContain('filename="dragged-rfp.pdf"');
+});
+
+test("knowledge can be added by dragging Markdown and rejects unsupported files", async ({ page }) => {
+  const state = await mockWorkspace(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "企业知识库", exact: true }).click();
+  await page.getByRole("button", { name: "上传文档", exact: true }).click();
+  await page.getByLabel("文档标题").fill("拖拽知识文档");
+  await page.getByLabel("知识分类").fill("security");
+  const dropZone = page.getByTestId("knowledge-file-drop-zone");
+  await dispatchFileDrag(dropZone, "drop", {
+    name: "unsafe.exe",
+    mimeType: "application/octet-stream",
+    content: "unsafe",
+  });
+  await expect(page.getByRole("alert")).toContainText("不支持 unsafe.exe");
+  expect(
+    await page
+      .getByLabel("选择企业知识文档")
+      .evaluate((input: HTMLInputElement) => input.files?.length),
+  ).toBe(0);
+  await dispatchFileDrag(dropZone, "drop", {
+    name: "company-knowledge.md",
+    mimeType: "text/markdown",
+    content: "# Knowledge",
+  });
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(dropZone.getByText("company-knowledge.md", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "确认提交" }).click();
+  await expect(page.getByText("知识文档已完成入库")).toBeVisible();
+  expect(state.lastKnowledgeUpload).toContain('filename="company-knowledge.md"');
 });
 
 test("retry replaces failure state in the open detail", async ({ page }) => {

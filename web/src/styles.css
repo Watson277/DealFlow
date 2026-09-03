@@ -1131,25 +1131,70 @@ td small {
   gap: 12px;
 }
 .file-field {
+  position: relative;
   min-height: 145px;
+  padding: 20px;
   border: 1px dashed #b9d5ca;
   border-radius: 13px;
   align-items: center;
   justify-content: center;
+  text-align: center;
   color: #39896f !important;
   background: #f6fbf9;
   cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.file-field:hover,
+.file-field:focus-visible,
+.file-field:focus-within {
+  border-color: #57b697;
+  outline: 0;
+  box-shadow: 0 0 0 3px #2e9f7d12;
+}
+.file-field.drag-active {
+  border-color: #218b6b;
+  border-style: solid;
+  background: #e9f8f2;
+  box-shadow: 0 0 0 4px #2e9f7d1c;
+  transform: translateY(-2px);
+}
+.file-field.invalid {
+  border-color: #d58c86;
+  background: #fff8f7;
+  color: #a84a43 !important;
+}
+.file-field > svg {
+  width: 27px;
+  height: 27px;
+}
+.file-field strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .file-field span {
+  max-width: 310px;
   color: #8c9b96;
   font-size: 10px;
+  line-height: 1.55;
   font-weight: 400;
 }
 .file-field input {
-  width: 230px;
-  height: auto;
-  padding: 7px;
-  background: #fff;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.file-field .file-error {
+  max-width: 310px;
+  color: #b43e36;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
 }
 .submit {
   width: 100%;
