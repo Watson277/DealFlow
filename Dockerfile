@@ -33,7 +33,9 @@ COPY app ./app
 
 RUN groupadd --system dealflow \
     && useradd --system --gid dealflow --home-dir /app dealflow \
-    && chown -R dealflow:dealflow /app
+    && mkdir -p /app/.cache/huggingface \
+    && chown -R dealflow:dealflow /app/.cache /app/app /app/alembic \
+    && chown dealflow:dealflow /app/alembic.ini
 
 USER dealflow
 

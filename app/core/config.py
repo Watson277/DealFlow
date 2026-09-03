@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -151,6 +152,13 @@ class Settings(BaseSettings):
     capability_max_output_tokens: int = 2_000
     capability_lock_ttl_seconds: int = 1_800
     capability_prompt_version: str = "capability-v1"
+    capability_reranker_enabled: bool = False
+    capability_reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    capability_reranker_device: Literal["auto", "cuda", "cpu"] = "auto"
+    capability_reranker_batch_size: int = Field(default=4, ge=1, le=128)
+    capability_reranker_query_max_tokens: int = Field(default=128, ge=16, le=2_048)
+    capability_reranker_knowledge_max_tokens: int = Field(default=512, ge=64, le=8_192)
+    capability_reranker_fallback_enabled: bool = True
     proposal_max_output_tokens: int = 12_000
     proposal_evidence_max_chars: int = 1_200
     proposal_lock_ttl_seconds: int = 1_800

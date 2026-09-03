@@ -52,6 +52,7 @@ class RetrievedEvidence:
     source_type: str | None = None
     location: dict[str, Any] | None = None
     retrieval_mode: Literal["dense", "hybrid"] = "dense"
+    rerank_score: float | None = None
 
 
 class QdrantKnowledgeStore:

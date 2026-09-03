@@ -16,6 +16,7 @@ from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.rag.embedding import EmbeddingService, OpenAIEmbeddingService
+from app.rag.reranker import CrossEncoderEvidenceReranker, EvidenceReranker
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.schemas.events import RequirementsExtractedEvent
 from app.workflow.stages.evaluate_capabilities import CapabilityProcessingService
@@ -31,6 +32,7 @@ class CapabilityWorker:
         embeddings: EmbeddingService | None = None,
         judge: CapabilityJudge | None = None,
         vector_store: QdrantKnowledgeStore | None = None,
+        reranker: EvidenceReranker | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.consumer = AIOKafkaConsumer(
@@ -52,6 +54,7 @@ class CapabilityWorker:
             judge=judge or OpenAICapabilityJudge(self.settings),
             locks=self.locks,
             outbox_publisher=OutboxPublisher(self.kafka),
+            reranker=reranker or CrossEncoderEvidenceReranker(self.settings),
         )
         self._stop_requested = asyncio.Event()
         self.started = asyncio.Event()

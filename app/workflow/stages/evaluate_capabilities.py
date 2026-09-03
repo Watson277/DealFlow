@@ -25,6 +25,7 @@ from app.models import (
 from app.models.enums import CapabilityStatus, OutboxStatus, RFPStatus, WorkflowStatus
 from app.models.mixins import generate_uuid, utc_now
 from app.rag.embedding import EmbeddingService
+from app.rag.reranker import EvidenceReranker, RrfEvidenceReranker
 from app.rag.retrieval import expand_parent_evidence
 from app.rag.vector_store import QdrantKnowledgeStore, RetrievedEvidence
 from app.repositories import (
@@ -58,6 +59,7 @@ class CapabilityProcessingService:
         judge: CapabilityJudge,
         locks: DistributedLockService,
         outbox_publisher: OutboxPublisher,
+        reranker: EvidenceReranker | None = None,
     ) -> None:
         self.settings = settings
         self.embeddings = embeddings
@@ -65,6 +67,7 @@ class CapabilityProcessingService:
         self.judge = judge
         self.locks = locks
         self.outbox_publisher = outbox_publisher
+        self.reranker = reranker or RrfEvidenceReranker()
 
     async def process(self, event: RequirementsExtractedEvent) -> None:
         async with self.locks.lock(
@@ -128,8 +131,13 @@ class CapabilityProcessingService:
                         evidence = await expand_parent_evidence(
                             session,
                             evidence,
-                            limit=self.settings.qdrant_search_top_k,
+                            limit=self.settings.qdrant_hybrid_fusion_top_k,
                         )
+                    evidence = await self.reranker.rerank(
+                        query_text,
+                        evidence,
+                        limit=self.settings.qdrant_search_top_k,
+                    )
                     judgment = (
                         await self.judge.judge(requirement, evidence)
                         if evidence
@@ -240,7 +248,11 @@ class CapabilityProcessingService:
                             page_number=evidence.page_number,
                             snippet=evidence.text,
                             retrieval_score=Decimal(str(round(evidence.score, 6))),
-                            rerank_score=None,
+                            rerank_score=(
+                                Decimal(str(round(evidence.rerank_score, 6)))
+                                if evidence.rerank_score is not None
+                                else None
+                            ),
                             rank_position=rank,
                         )
                     )

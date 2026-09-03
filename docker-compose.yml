@@ -19,6 +19,13 @@ x-app-environment: &app-environment
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4/}
   LLM_MODEL: ${LLM_MODEL:-glm-5.3-flash}
+  CAPABILITY_RERANKER_ENABLED: ${CAPABILITY_RERANKER_ENABLED:-true}
+  CAPABILITY_RERANKER_MODEL: ${CAPABILITY_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+  CAPABILITY_RERANKER_DEVICE: ${CAPABILITY_RERANKER_DEVICE:-cuda}
+  CAPABILITY_RERANKER_BATCH_SIZE: ${CAPABILITY_RERANKER_BATCH_SIZE:-4}
+  CAPABILITY_RERANKER_QUERY_MAX_TOKENS: ${CAPABILITY_RERANKER_QUERY_MAX_TOKENS:-128}
+  CAPABILITY_RERANKER_KNOWLEDGE_MAX_TOKENS: ${CAPABILITY_RERANKER_KNOWLEDGE_MAX_TOKENS:-512}
+  CAPABILITY_RERANKER_FALLBACK_ENABLED: ${CAPABILITY_RERANKER_FALLBACK_ENABLED:-true}
 
 x-app-service: &app-service
   build:
@@ -312,6 +319,8 @@ services:
         exec python -m app.workers.capability_worker
     depends_on: *app-dependencies
     restart: on-failure
+    volumes:
+      - huggingface_cache:/app/.cache/huggingface
 
   proposal-worker:
     <<: *app-service
@@ -343,3 +352,5 @@ volumes:
     name: dealflow-qdrant-data
   minio_data:
     name: dealflow-minio-data
+  huggingface_cache:
+    name: dealflow-huggingface-cache
