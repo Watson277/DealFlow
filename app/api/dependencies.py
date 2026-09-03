@@ -8,6 +8,7 @@ from app.db.session import get_db_session
 from app.documents.parser import DocumentParser
 from app.infrastructure.messaging.kafka import KafkaProducerService, get_kafka_service
 from app.infrastructure.messaging.outbox import OutboxPublisher
+from app.infrastructure.storage.local_artifacts import LocalArtifactExporter
 from app.infrastructure.storage.minio import ObjectStorageService, get_object_storage_service
 from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import OpenAIEmbeddingService
@@ -84,4 +85,5 @@ def get_knowledge_service(
         chunker=KnowledgeChunker(settings),
         embeddings=OpenAIEmbeddingService(settings),
         vector_store=QdrantKnowledgeStore(settings),
+        local_exporter=LocalArtifactExporter(settings),
     )

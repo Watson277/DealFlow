@@ -15,6 +15,7 @@ from app.documents.parser import DocumentParser
 from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.infrastructure.messaging.outbox import OutboxPublisher
+from app.infrastructure.storage.local_artifacts import LocalArtifactExporter
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.schemas.events import RFPUploadedEvent
 from app.workflow.stages.parse_rfp import RFPProcessingService
@@ -42,6 +43,7 @@ class RFPWorker:
             parser=DocumentParser.from_settings(self.settings),
             locks=self.locks,
             outbox_publisher=OutboxPublisher(self.kafka),
+            local_exporter=LocalArtifactExporter(self.settings),
         )
         self._stop_requested = asyncio.Event()
         self.started = asyncio.Event()

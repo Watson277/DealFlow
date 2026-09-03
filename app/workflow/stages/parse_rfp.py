@@ -10,11 +10,13 @@ from app.db.session import async_session_factory
 from app.documents.parser import DocumentParser
 from app.documents.pdf import (
     DOCUMENT_IR_CONTENT_TYPE,
+    DOCUMENT_IR_FILENAME,
     document_ir_object_key,
     serialize_document_ir,
 )
 from app.infrastructure.locking.redis import DistributedLockService
 from app.infrastructure.messaging.outbox import OutboxPublisher
+from app.infrastructure.storage.local_artifacts import LocalArtifactExporter
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import RFP, Document, OutboxEvent, WorkflowRun
 from app.models.enums import (
@@ -43,12 +45,14 @@ class RFPProcessingService:
         parser: DocumentParser,
         locks: DistributedLockService,
         outbox_publisher: OutboxPublisher,
+        local_exporter: LocalArtifactExporter | None = None,
     ) -> None:
         self.settings = settings
         self.storage = storage
         self.parser = parser
         self.locks = locks
         self.outbox_publisher = outbox_publisher
+        self.local_exporter = local_exporter
 
     async def process(self, event: RFPUploadedEvent) -> None:
         async with self.locks.lock(f"lock:rfp:{event.rfp_id}"):
@@ -96,6 +100,18 @@ class RFPProcessingService:
                     page_count=parsed.page_count,
                     text_size=len(parsed.text.encode("utf-8")),
                 )
+                await self._export_locally(
+                    document_id=document.id,
+                    original_filename=document.original_filename,
+                    parsed_text=parsed.text,
+                    document_ir=(
+                        serialize_document_ir(parsed.document_ir)
+                        if parsed.document_ir is not None
+                        else None
+                    ),
+                    parsed_object_key=parsed_object_key,
+                    parsed_ir_object_key=parsed_ir_object_key,
+                )
             except Exception as exc:
                 await self._mark_failed(session, event, exc)
                 logger.warning(
@@ -113,6 +129,48 @@ class RFPProcessingService:
                 workflow_run_id=workflow_run.id,
                 parsed_text_object_key=parsed_object_key,
                 parsed_ir_object_key=parsed_ir_object_key,
+            )
+
+    async def _export_locally(
+        self,
+        *,
+        document_id: str,
+        original_filename: str,
+        parsed_text: str,
+        document_ir: str | None,
+        parsed_object_key: str,
+        parsed_ir_object_key: str | None,
+    ) -> None:
+        if self.local_exporter is None:
+            return
+        artifacts = {"parsed.md": parsed_text}
+        if document_ir is not None:
+            artifacts[DOCUMENT_IR_FILENAME] = document_ir
+        try:
+            directory = await asyncio.to_thread(
+                self.local_exporter.export,
+                kind="rfp",
+                document_id=document_id,
+                original_filename=original_filename,
+                artifacts=artifacts,
+                metadata={
+                    "parsed_text_object_key": parsed_object_key,
+                    "parsed_ir_object_key": parsed_ir_object_key,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "rfp_local_artifact_export_failed",
+                document_id=document_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return
+        if directory is not None:
+            logger.info(
+                "rfp_local_artifacts_exported",
+                document_id=document_id,
+                directory=str(directory),
             )
 
     async def _mark_processing(

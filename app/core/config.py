@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr
@@ -62,6 +63,9 @@ class Settings(BaseSettings):
         default="dealflow",
         validation_alias=AliasChoices("MINIO_BUCKET", "DEALFLOW_MINIO_BUCKET"),
     )
+
+    local_artifact_export_enabled: bool = False
+    local_artifact_export_dir: Path = Path("data/processed-documents")
 
     max_rfp_upload_size_bytes: int = 50 * 1024 * 1024
     pdf_parser_version: str = Field(

@@ -3,6 +3,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
+import structlog
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,9 +11,11 @@ from app.core.exceptions import DeletionConflictError, KnowledgeIndexError, Know
 from app.documents.parser import DocumentParser
 from app.documents.pdf import (
     DOCUMENT_IR_CONTENT_TYPE,
+    DOCUMENT_IR_FILENAME,
     document_ir_object_key,
     serialize_document_ir,
 )
+from app.infrastructure.storage.local_artifacts import LocalArtifactExporter
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.models import Document
 from app.models.enums import DocumentStatus, DocumentType
@@ -21,6 +24,7 @@ from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import EmbeddingService
 from app.rag.hierarchical import (
     KNOWLEDGE_CHUNK_CONTENT_TYPE,
+    KNOWLEDGE_CHUNK_FILENAME,
     DocxStructureAdapter,
     HierarchicalKnowledgeChunker,
     MarkdownStructureAdapter,
@@ -30,6 +34,8 @@ from app.rag.hierarchical import (
 )
 from app.rag.vector_store import QdrantKnowledgeStore
 from app.repositories import DocumentRepository, KnowledgeChunkRepository
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +56,7 @@ class KnowledgeService:
         chunker: KnowledgeChunker,
         embeddings: EmbeddingService,
         vector_store: QdrantKnowledgeStore,
+        local_exporter: LocalArtifactExporter | None = None,
     ) -> None:
         self.session = session
         self.storage = storage
@@ -57,6 +64,7 @@ class KnowledgeService:
         self.chunker = chunker
         self.embeddings = embeddings
         self.vector_store = vector_store
+        self.local_exporter = local_exporter
 
     async def ingest(
         self,
@@ -141,9 +149,10 @@ class KnowledgeService:
                 structural_document
             )
             chunks_object_key = knowledge_chunk_object_key(document_id)
+            serialized_chunks = serialize_knowledge_chunks(bundle)
             await self.storage.upload_text(
                 chunks_object_key,
-                serialize_knowledge_chunks(bundle),
+                serialized_chunks,
                 content_type=KNOWLEDGE_CHUNK_CONTENT_TYPE,
             )
             vectors = await self.embeddings.embed(
@@ -179,6 +188,20 @@ class KnowledgeService:
                     "chunk_schema_version": bundle.schema_version,
                 }
                 document = persisted
+            await self._export_locally(
+                document_id=document_id,
+                original_filename=stored.original_filename,
+                parsed_text=parsed.text,
+                document_ir=(
+                    serialize_document_ir(parsed.document_ir)
+                    if parsed.document_ir is not None
+                    else None
+                ),
+                serialized_chunks=serialized_chunks,
+                parsed_object_key=parsed_object_key,
+                parsed_ir_object_key=parsed_ir_object_key,
+                chunks_object_key=chunks_object_key,
+            )
         except Exception:
             await self._mark_failed(
                 document_id,
@@ -190,6 +213,54 @@ class KnowledgeService:
                 await self.vector_store.delete_document(document_id)
             raise
         return document
+
+    async def _export_locally(
+        self,
+        *,
+        document_id: str,
+        original_filename: str,
+        parsed_text: str,
+        document_ir: str | None,
+        serialized_chunks: str,
+        parsed_object_key: str,
+        parsed_ir_object_key: str | None,
+        chunks_object_key: str,
+    ) -> None:
+        if self.local_exporter is None:
+            return
+        artifacts = {
+            "parsed.md": parsed_text,
+            KNOWLEDGE_CHUNK_FILENAME: serialized_chunks,
+        }
+        if document_ir is not None:
+            artifacts[DOCUMENT_IR_FILENAME] = document_ir
+        try:
+            directory = await asyncio.to_thread(
+                self.local_exporter.export,
+                kind="knowledge",
+                document_id=document_id,
+                original_filename=original_filename,
+                artifacts=artifacts,
+                metadata={
+                    "parsed_text_object_key": parsed_object_key,
+                    "parsed_ir_object_key": parsed_ir_object_key,
+                    "chunks_object_key": chunks_object_key,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "knowledge_local_artifact_export_failed",
+                document_id=document_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return
+        if directory is not None:
+            logger.info(
+                "knowledge_local_artifacts_exported",
+                document_id=document_id,
+                directory=str(directory),
+            )
 
     async def list(self, *, offset: int, limit: int) -> KnowledgePage:
         repository = DocumentRepository(self.session)
