@@ -20,7 +20,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.capability import CapabilityEvidence
-    from app.models.knowledge_chunk import KnowledgeChunkRecord
+    from app.models.knowledge_chunk import KnowledgeChildIndexRecord, KnowledgeChunkRecord
     from app.models.requirement import Requirement
     from app.models.rfp import RFP
     from app.models.user import User
@@ -33,6 +33,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("size_bytes >= 0", name="size_bytes_nonnegative"),
         Index("ix_documents_rfp_type", "rfp_id", "document_type"),
         Index("ix_documents_checksum", "checksum_sha256"),
+        Index("ix_documents_content_hash", "content_hash"),
         Index("ix_documents_type_status", "document_type", "status"),
     )
 
@@ -59,6 +60,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     document_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     knowledge_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -71,6 +73,10 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     requirements: Mapped[list[Requirement]] = relationship(back_populates="source_document")
     evidence_items: Mapped[list[CapabilityEvidence]] = relationship(back_populates="document")
     knowledge_chunks: Mapped[list[KnowledgeChunkRecord]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+    knowledge_child_indexes: Mapped[list[KnowledgeChildIndexRecord]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
     )

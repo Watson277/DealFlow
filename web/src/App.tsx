@@ -15,6 +15,7 @@ import {
   ChevronRight,
   CircleGauge,
   FileCheck2,
+  FilePenLine,
   FileText,
   LayoutDashboard,
   LoaderCircle,
@@ -114,6 +115,8 @@ export default function App() {
   const [rfps, setRfps] = useState<RFP[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeDocument[]>([]);
+  const [editingKnowledge, setEditingKnowledge] =
+    useState<KnowledgeDocument | null>(null);
   const [statuses, setStatuses] = useState<Record<string, RFPStatus>>({});
   const [selectedRFP, setSelectedRFP] = useState<RFP | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("requirements");
@@ -565,7 +568,10 @@ export default function App() {
                 </div>
                 <button
                   className="secondary"
-                  onClick={() => setPanel("knowledge")}
+                  onClick={() => {
+                    setEditingKnowledge(null);
+                    setPanel("knowledge");
+                  }}
                 >
                   <UploadCloud size={17} />
                   上传文档
@@ -575,6 +581,10 @@ export default function App() {
                 <div className="document-grid">
                   {knowledge.map((item) => (
                     <DocumentCard key={item.id} item={item} busy={busy}
+                      onUpdate={() => {
+                        setEditingKnowledge(item);
+                        setPanel("knowledge");
+                      }}
                       onDelete={() => void deleteItem("knowledge", item.id, String(item.extra_data.title ?? item.original_filename))} />
                   ))}
                 </div>
@@ -624,9 +634,13 @@ export default function App() {
         <SidePanel
           panel={panel}
           customers={customers}
+          knowledgeDocument={editingKnowledge}
           busy={busy}
           onClose={() => {
-            if (!busy) setPanel(null);
+            if (!busy) {
+              setPanel(null);
+              setEditingKnowledge(null);
+            }
           }}
           onSubmit={runAction}
         />
@@ -936,8 +950,11 @@ function RFPDetail({
   );
 }
 
-function DocumentCard({ item, busy, onDelete }: {
-  item: KnowledgeDocument; busy: boolean; onDelete: () => void;
+function DocumentCard({ item, busy, onUpdate, onDelete }: {
+  item: KnowledgeDocument;
+  busy: boolean;
+  onUpdate: () => void;
+  onDelete: () => void;
 }) {
   return (
     <article className="document-card">
@@ -958,6 +975,14 @@ function DocumentCard({ item, busy, onDelete }: {
       </div>
       <div className="card-actions">
         <StatusBadge value={item.status} />
+        <button
+          className="secondary"
+          disabled={busy || ["INDEXING", "PARSING"].includes(item.status)}
+          aria-label={`更新知识库文档 ${String(item.extra_data.title ?? item.original_filename)}`}
+          onClick={onUpdate}
+        >
+          <FilePenLine size={15} />更新
+        </button>
         <button className="danger-button" disabled={busy || ["INDEXING", "PARSING"].includes(item.status)}
           aria-label={`删除知识库文档 ${String(item.extra_data.title ?? item.original_filename)}`} onClick={onDelete}>
           <Trash2 size={15} />删除
@@ -988,12 +1013,14 @@ function CustomerCard({ item, busy, onDelete }: {
 function SidePanel({
   panel,
   customers,
+  knowledgeDocument,
   busy,
   onClose,
   onSubmit,
 }: {
   panel: Exclude<Panel, null>;
   customers: Customer[];
+  knowledgeDocument: KnowledgeDocument | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (action: () => Promise<unknown>, success: string) => Promise<void>;
@@ -1015,8 +1042,16 @@ function SidePanel({
     }
     if (panel === "rfp")
       void onSubmit(() => api.createRFP(data), "RFP 已进入处理队列");
-    if (panel === "knowledge")
-      void onSubmit(() => api.createKnowledge(data), "知识文档已完成入库");
+    if (panel === "knowledge") {
+      if (knowledgeDocument) {
+        void onSubmit(
+          () => api.updateKnowledge(knowledgeDocument.id, data),
+          "知识文档已完成增量更新",
+        );
+      } else {
+        void onSubmit(() => api.createKnowledge(data), "知识文档已完成入库");
+      }
+    }
     if (panel === "customer") {
       const body = Object.fromEntries(
         Array.from(data.entries()).filter(([, value]) => value !== ""),
@@ -1040,12 +1075,14 @@ function SidePanel({
       >
         <div className="panel-head">
           <div>
-            <span>NEW RECORD</span>
+            <span>{knowledgeDocument ? "UPDATE RECORD" : "NEW RECORD"}</span>
             <h2 id="panel-title">
               {panel === "rfp"
                 ? "新建 RFP"
                 : panel === "knowledge"
-                  ? "上传知识文档"
+                  ? knowledgeDocument
+                    ? "更新知识文档"
+                    : "上传知识文档"
                   : "新增客户"}
             </h2>
           </div>
@@ -1107,19 +1144,30 @@ function SidePanel({
             <>
               <label>
                 文档标题
-                <input name="title" required />
+                <input
+                  name="title"
+                  required
+                  defaultValue={String(knowledgeDocument?.extra_data.title ?? "")}
+                />
               </label>
               <label>
                 知识分类
-                <input name="category" required />
+                <input
+                  name="category"
+                  required
+                  defaultValue={knowledgeDocument?.knowledge_category ?? ""}
+                />
               </label>
               <label>
                 版本
-                <input name="version" />
+                <input
+                  name="version"
+                  defaultValue={knowledgeDocument?.document_version ?? ""}
+                />
               </label>
               <FileDropField
-                id="knowledge-file"
-                title="选择企业知识文档"
+                id={knowledgeDocument ? "knowledge-update-file" : "knowledge-file"}
+                title={knowledgeDocument ? "选择新版知识文档" : "选择企业知识文档"}
                 help="支持 PDF、DOCX 或 Markdown，将被解析并写入向量库"
                 accept=".pdf,.docx,.md,.markdown,text/markdown"
                 allowedExtensions={[".pdf", ".docx", ".md", ".markdown"]}

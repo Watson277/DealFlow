@@ -16,6 +16,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const body = (await response.json()) as { detail?: unknown };
       if (typeof body.detail === "string") message = body.detail;
+      if (
+        body.detail &&
+        typeof body.detail === "object" &&
+        "message" in body.detail &&
+        typeof body.detail.message === "string"
+      ) {
+        const title =
+          "existing_title" in body.detail &&
+          typeof body.detail.existing_title === "string"
+            ? `：${body.detail.existing_title}`
+            : "";
+        message = `${body.detail.message}${title}`;
+      }
       if (Array.isArray(body.detail)) {
         message = body.detail
           .map(
@@ -57,6 +70,8 @@ export const api = {
   knowledge: () => listAll<KnowledgeDocument>("/knowledge"),
   createKnowledge: (body: FormData) =>
     request<KnowledgeDocument>("/knowledge", { method: "POST", body }),
+  updateKnowledge: (id: string, body: FormData) =>
+    request<KnowledgeDocument>(`/knowledge/${id}`, { method: "PUT", body }),
   rfps: () => listAll<RFP>("/rfps"),
   createRFP: (body: FormData) =>
     request<unknown>("/rfps", { method: "POST", body }),

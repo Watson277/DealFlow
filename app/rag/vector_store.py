@@ -143,15 +143,18 @@ class QdrantKnowledgeStore:
         category: str,
         chunks: Sequence[KnowledgeChunk | ChildChunk],
         vectors: list[list[float]],
+        point_ids: Sequence[str] | None = None,
     ) -> list[str]:
         if len(chunks) != len(vectors):
             raise KnowledgeIndexError("knowledge chunks and embeddings do not align")
         if not vectors:
             raise KnowledgeIndexError("knowledge document produced no embeddings")
+        if point_ids is not None and len(point_ids) != len(chunks):
+            raise KnowledgeIndexError("Qdrant point IDs and knowledge chunks do not align")
         await self.ensure_collection(len(vectors[0]))
-        point_ids: list[str] = []
+        indexed_point_ids: list[str] = []
         points: list[PointStruct] = []
-        for chunk, vector in zip(chunks, vectors, strict=True):
+        for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
             parent_id: str | None
             if isinstance(chunk, ChildChunk):
                 chunk_index = chunk.order
@@ -191,7 +194,9 @@ class QdrantKnowledgeStore:
                 parent_id = getattr(chunk, "parent_id", None)
                 token_count = None
                 embedding_token_count = None
-            point_ids.append(point_id)
+            if point_ids is not None:
+                point_id = point_ids[index]
+            indexed_point_ids.append(point_id)
             points.append(
                 PointStruct(
                     id=point_id,
@@ -234,7 +239,110 @@ class QdrantKnowledgeStore:
             )
         except Exception as exc:
             raise KnowledgeIndexError("failed to index knowledge chunks in Qdrant") from exc
-        return point_ids
+        return indexed_point_ids
+
+    async def update_child_payload(
+        self,
+        *,
+        point_id: str,
+        document_id: str,
+        title: str,
+        version: str | None,
+        category: str,
+        chunk: ChildChunk,
+    ) -> None:
+        page = chunk.location.page_start if isinstance(chunk.location, PDFSourceLocation) else None
+        page_end = (
+            chunk.location.page_end
+            if isinstance(chunk.location, PDFSourceLocation)
+            else None
+        )
+        payload = {
+            "document_id": document_id,
+            "title": title,
+            "version": version,
+            "page": page,
+            "page_end": page_end,
+            "chunk_index": chunk.order,
+            "chunk_id": chunk.chunk_id,
+            "chunk_level": "child",
+            "section_path": list(chunk.section_path),
+            "block_types": list(chunk.block_types),
+            "source_block_ids": list(chunk.source_node_ids),
+            "parent_id": chunk.parent_id,
+            "source_type": chunk.location.source_type,
+            "location": chunk.location.model_dump(mode="json"),
+            "token_count": chunk.token_count,
+            "embedding_token_count": chunk.embedding_token_count,
+            "category": category,
+            "status": "ACTIVE",
+            "text": chunk.text,
+        }
+        try:
+            await self.client.overwrite_payload(
+                collection_name=self.settings.qdrant_collection,
+                payload=payload,
+                points=[point_id],
+                wait=True,
+            )
+        except Exception as exc:
+            raise KnowledgeIndexError("failed to update knowledge chunk payload") from exc
+
+    async def delete_points(
+        self,
+        point_ids: Sequence[str],
+        *,
+        collection_name: str | None = None,
+    ) -> None:
+        if not point_ids:
+            return
+        collection = collection_name or self.settings.qdrant_collection
+        if not await self.client.collection_exists(collection):
+            return
+        try:
+            await self.client.delete(
+                collection_name=collection,
+                points_selector=list(dict.fromkeys(point_ids)),
+                wait=True,
+            )
+        except Exception as exc:
+            raise KnowledgeIndexError("failed to delete knowledge chunk points") from exc
+
+    async def document_point_ids(
+        self,
+        document_id: str,
+        *,
+        collection_name: str | None = None,
+    ) -> dict[str, str]:
+        collection = collection_name or self.settings.qdrant_collection
+        if not await self.client.collection_exists(collection):
+            return {}
+        result: dict[str, str] = {}
+        offset: Any = None
+        while True:
+            records, offset = await self.client.scroll(
+                collection_name=collection,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for record in records:
+                payload = record.payload or {}
+                chunk_id = payload.get("chunk_id")
+                if isinstance(chunk_id, str):
+                    result[chunk_id] = str(record.id)
+            if offset is None:
+                break
+        return result
 
     async def search(
         self,

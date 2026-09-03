@@ -17,6 +17,7 @@ from app.api.dependencies import get_knowledge_service
 from app.core.exceptions import (
     DeletionConflictError,
     DocumentProcessingError,
+    DuplicateKnowledgeError,
     EmbeddingError,
     EmptyUploadError,
     KnowledgeIndexError,
@@ -30,6 +31,18 @@ from app.schemas.knowledge import KnowledgeDocumentListResponse, KnowledgeDocume
 from app.services.knowledge import KnowledgeService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+
+def _duplicate_response(exc: DuplicateKnowledgeError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "KNOWLEDGE_DUPLICATE",
+            "message": "该文件内容已存在，未重复写入知识库",
+            "existing_document_id": exc.document_id,
+            "existing_title": exc.title,
+        },
+    )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -68,6 +81,8 @@ async def create_knowledge_document(
             category=category,
             version=version,
         )
+    except DuplicateKnowledgeError as exc:
+        raise _duplicate_response(exc) from exc
     except UnsupportedDocumentError as exc:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -94,6 +109,53 @@ async def create_knowledge_document(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    finally:
+        await file.close()
+        await service.close()
+    return KnowledgeDocumentResponse.model_validate(document)
+
+
+@router.put("/{document_id}", response_model=KnowledgeDocumentResponse)
+async def update_knowledge_document(
+    document_id: UUID,
+    file: Annotated[
+        UploadFile,
+        File(description="Replacement enterprise knowledge PDF, DOCX, MD, or MARKDOWN file"),
+    ],
+    title: Annotated[str, Form(min_length=1, max_length=255)],
+    category: Annotated[str, Form(min_length=1, max_length=64)],
+    service: Annotated[KnowledgeService, Depends(get_knowledge_service)],
+    version: Annotated[str | None, Form(max_length=32)] = None,
+) -> KnowledgeDocumentResponse:
+    try:
+        document = await service.update(
+            str(document_id),
+            file,
+            title=title,
+            category=category,
+            version=version,
+        )
+    except DuplicateKnowledgeError as exc:
+        raise _duplicate_response(exc) from exc
+    except KnowledgeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except EmptyUploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DocumentProcessingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (
+        EmbeddingError,
+        LLMConfigurationError,
+        ObjectStorageError,
+        KnowledgeIndexError,
+    ) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     finally:
         await file.close()
         await service.close()

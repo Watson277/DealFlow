@@ -66,3 +66,36 @@ class KnowledgeChunkRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
     document: Mapped[Document] = relationship(back_populates="knowledge_chunks")
+
+
+class KnowledgeChildIndexRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Lightweight Child hash/index metadata used for incremental knowledge updates."""
+
+    __tablename__ = "knowledge_child_indexes"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "child_chunk_id",
+            name="uq_knowledge_child_indexes_document_chunk",
+        ),
+        Index("ix_knowledge_child_indexes_document", "document_id"),
+        Index("ix_knowledge_child_indexes_content_hash", "content_hash"),
+        Index("ix_knowledge_child_indexes_embedding_hash", "embedding_hash"),
+        Index("ix_knowledge_child_indexes_structural_hash", "structural_hash"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    child_chunk_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    parent_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    qdrant_point_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    chunk_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    child_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    structural_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    document: Mapped[Document] = relationship(back_populates="knowledge_child_indexes")

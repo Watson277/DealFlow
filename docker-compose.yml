@@ -251,7 +251,10 @@ services:
   migration:
     <<: *app-service
     container_name: dealflow-migration
-    command: ["alembic", "upgrade", "head"]
+    command:
+      - /bin/sh
+      - -c
+      - alembic upgrade head && python -m app.rag.backfill_incremental
     depends_on:
       mysql:
         condition: service_healthy

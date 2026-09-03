@@ -101,5 +101,7 @@ async def test_vector_store_contains_only_child_data_and_parent_id(monkeypatch) 
             12,
             13,
         }
+        point_ids = await store.document_point_ids("knowledge-1")
+        assert point_ids == {child.chunk_id: child.chunk_id for child in children}
     finally:
         await store.close()

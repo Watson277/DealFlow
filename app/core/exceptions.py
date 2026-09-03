@@ -18,6 +18,13 @@ class KnowledgeNotFoundError(DealFlowError):
     pass
 
 
+class DuplicateKnowledgeError(DealFlowError):
+    def __init__(self, document_id: str, title: str) -> None:
+        self.document_id = document_id
+        self.title = title
+        super().__init__(f"知识文档内容重复：{title} ({document_id})")
+
+
 class UnsupportedDocumentError(DealFlowError):
     pass
 

@@ -42,6 +42,7 @@ export interface KnowledgeDocument {
   status: string;
   original_filename: string;
   size_bytes: number;
+  content_hash: string | null;
   document_version: string | null;
   knowledge_category: string | null;
   parsed_text_object_key: string | null;

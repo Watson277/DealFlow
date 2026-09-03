@@ -69,6 +69,7 @@ class ObjectStorageService:
         *,
         document_id: str,
         category: str,
+        revision_id: str | None = None,
     ) -> StoredObject:
         original_filename = Path(upload.filename or "upload").name
         extension = Path(original_filename).suffix.lower()
@@ -78,7 +79,10 @@ class ObjectStorageService:
             )
         safe_filename = self._sanitize_filename(original_filename)
         safe_category = self._sanitize_filename(category.lower())
-        object_key = f"knowledge/{safe_category}/{document_id}/{safe_filename}"
+        document_prefix = (
+            f"{document_id}/versions/{revision_id}" if revision_id is not None else document_id
+        )
+        object_key = f"knowledge/{safe_category}/{document_prefix}/{safe_filename}"
         return await self._upload_document(upload, object_key, extension)
 
     async def _upload_document(

@@ -11,6 +11,7 @@ class KnowledgeDocumentResponse(BaseModel):
     original_filename: str
     content_type: str
     size_bytes: int
+    content_hash: str | None
     page_count: int | None
     document_version: str | None
     knowledge_category: str | None

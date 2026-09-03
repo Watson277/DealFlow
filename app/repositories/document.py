@@ -62,3 +62,18 @@ class DocumentRepository(BaseRepository[Document]):
             Document.status == DocumentStatus.READY.value,
         )
         return set((await self.session.scalars(statement)).all())
+
+    async def find_active_knowledge_by_content_hash(
+        self,
+        content_hash: str,
+        *,
+        exclude_document_id: str | None = None,
+    ) -> Document | None:
+        statement = select(Document).where(
+            Document.document_type == DocumentType.KNOWLEDGE.value,
+            Document.status != DocumentStatus.ARCHIVED.value,
+            Document.content_hash == content_hash,
+        )
+        if exclude_document_id is not None:
+            statement = statement.where(Document.id != exclude_document_id)
+        return (await self.session.scalars(statement.limit(1))).first()
