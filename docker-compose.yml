@@ -294,6 +294,13 @@ services:
   capability-worker:
     <<: *app-service
     container_name: dealflow-capability-worker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     command:
       - /bin/sh
       - -c

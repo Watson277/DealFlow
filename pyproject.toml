@@ -35,7 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 local-embeddings = [
     "sentence-transformers>=3.4,<6",
-    "torch>=2.5,<3",
+    "torch==2.8.0",
 ]
 dev = [
     "mypy>=1.14,<2",
@@ -46,6 +46,14 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

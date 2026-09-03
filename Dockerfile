@@ -25,7 +25,7 @@ RUN sed -i \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra local-embeddings
 
 COPY alembic.ini ./
 COPY alembic ./alembic
