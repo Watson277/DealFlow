@@ -47,7 +47,8 @@ services:
     gpus: all
     volumes:
       - ./evals/retrieval/reports:/app/evals/retrieval/reports
-      - rag_eval_huggingface:/app/.cache/huggingface
+      - huggingface_cache:/app/.cache/huggingface
 
 volumes:
-  rag_eval_huggingface:
+  huggingface_cache:
+    name: dealflow-huggingface-cache

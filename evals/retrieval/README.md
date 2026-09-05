@@ -53,7 +53,7 @@ docker compose -f docker-compose.rag-eval.yml up `
 docker compose -f docker-compose.rag-eval.yml down
 ```
 
-镜像没有变化时可以省略 `--build`。Cross Encoder 使用 GPU；模型文件保存在 `rag_eval_huggingface` Volume 中，后续运行不必重复下载。
+镜像没有变化时可以省略 `--build`。Cross Encoder 使用 GPU，并复用主项目的 `dealflow-huggingface-cache` 模型缓存卷，不会为评测重复下载同一个模型。该共享卷只保存模型文件，不包含业务数据。
 
 ## 本机隔离评测
 
