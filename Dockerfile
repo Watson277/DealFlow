@@ -33,6 +33,7 @@ RUN --mount=type=cache,id=dealflow-uv,target=/root/.cache/uv,sharing=locked \
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
+COPY evals ./evals
 
 RUN groupadd --system dealflow \
     && useradd --system --gid dealflow --home-dir /app dealflow \

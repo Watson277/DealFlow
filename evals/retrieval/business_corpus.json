@@ -1,0 +1,11 @@
+{
+  "documents": [
+    {
+      "document_key": "dealflow-enterprise-capability-handbook-v1",
+      "path": "business_knowledge.md",
+      "title": "DealFlow Enterprise Platform Capability Handbook",
+      "category": "enterprise-capabilities",
+      "version": "1.0"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,54 @@ def test_retrieval_evaluation_computes_hit_recall_and_mrr(tmp_path: Path) -> Non
     assert report.hit_rate == 1.0
     assert report.mean_recall == 1.0
     assert report.mean_reciprocal_rank == 0.5
+    assert report.mean_ndcg == pytest.approx(1 / math.log2(3))
     assert report.queries[0].first_relevant_rank == 2
+    assert report.queries[0].candidates[1].relevant is True
+    assert report.queries[0].candidates[1].text_preview == "Evidence"
+
+
+def test_retrieval_evaluation_computes_graded_ndcg_and_latency(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset.jsonl"
+    dataset.write_text(
+        json.dumps(
+            {
+                "query_id": "graded",
+                "query": "Identity and audit controls",
+                "category": "security",
+                "difficulty": "hard",
+                "critical": True,
+                "relevant": [
+                    {
+                        "title": "Guide",
+                        "section_path": ["Identity"],
+                        "relevance": 3,
+                    },
+                    {
+                        "title": "Guide",
+                        "section_path": ["Audit"],
+                        "relevance": 1,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cases = load_evaluation_cases(dataset)
+
+    report = evaluate_retrieval(
+        cases,
+        [[_evidence("Guide", "Audit", 0.9), _evidence("Guide", "Identity", 0.8)]],
+        top_k=2,
+        latencies_ms=[12.5],
+    )
+
+    actual_dcg = 1 + 7 / math.log2(3)
+    ideal_dcg = 7 + 1 / math.log2(3)
+    assert report.mean_ndcg == pytest.approx(actual_dcg / ideal_dcg)
+    assert report.mean_latency_ms == 12.5
+    assert report.p95_latency_ms == 12.5
+    assert report.queries[0].difficulty == "hard"
+    assert report.queries[0].critical is True
 
 
 def test_retrieval_evaluation_rejects_duplicate_query_ids(tmp_path: Path) -> None:

@@ -1,31 +1,94 @@
-# 检索评测
+# RAG 检索评测
 
-该目录提供一份固定企业知识文档和 8 条带相关章节标签的中英文混合查询，用于比较 Dense 与 Hybrid 检索。评测单位是 Parent，指标包括 Hit Rate@K、Recall@K 和 MRR@K。
+评测器支持三条检索链路：
 
-## 准备数据
+- `dense`：Dense 向量召回；
+- `hybrid`：Dense 与 BM25 召回后使用 RRF 融合；
+- `hybrid_reranker`：Hybrid 候选经过 `bge-reranker-v2-m3` 重排。
 
-启动应用后，通过知识库接口上传 `enterprise_knowledge.md`：
+指标包括 Hit Rate@K、Recall@K、MRR@K、nDCG@K、平均耗时和 P95 耗时。报告同时保存每条 Query 的候选 Parent、命中 Child、召回分和重排分。
 
-```powershell
-curl.exe --fail-with-body -X POST "http://localhost:8000/knowledge" `
-  -F "title=DealFlow Retrieval Evaluation Knowledge" `
-  -F "category=retrieval-eval" `
-  -F "version=1.0" `
-  -F "file=@evals/retrieval/enterprise_knowledge.md;type=text/markdown"
+## 数据
+
+- `business_knowledge.md`：固定企业能力知识文档；
+- `business_corpus.json`：隔离语料清单；
+- `business_queries.jsonl`：20 条业务查询，包含难度、关键查询和分级相关性；
+- `sample_queries.jsonl`：原有 8 条回归样本；
+- `baseline-2026-09-02.json`：原有 Dense/Hybrid 实测基线。
+
+每个相关标签支持 `relevance`，正整数越大表示相关性越强：
+
+```json
+{
+  "query_id": "iam-saml",
+  "query": "平台必须支持 SAML 2.0 单点登录。",
+  "category": "security",
+  "difficulty": "easy",
+  "critical": true,
+  "relevant": [
+    {
+      "title": "DealFlow Enterprise Platform Capability Handbook",
+      "section_path": [
+        "DealFlow Enterprise Platform Capability Handbook",
+        "Identity and Access Management"
+      ],
+      "relevance": 3
+    }
+  ]
+}
 ```
 
-## 运行基线和混合检索评测
+## 推荐：Docker 隔离评测
+
+下面的命令只启动独立 Qdrant 和一次性评测容器，不连接开发用 MySQL、MinIO 或正式 Qdrant Collection。临时 Collection 在评测结束后自动删除，报告写入 `evals/retrieval/reports/latest`。
+
+首次或代码变更后构建并运行：
+
+```powershell
+docker compose -f docker-compose.rag-eval.yml up `
+  --build `
+  --abort-on-container-exit `
+  --exit-code-from rag-eval
+
+docker compose -f docker-compose.rag-eval.yml down
+```
+
+镜像没有变化时可以省略 `--build`。Cross Encoder 使用 GPU；模型文件保存在 `rag_eval_huggingface` Volume 中，后续运行不必重复下载。
+
+## 本机隔离评测
+
+也可以复用正在运行的 Qdrant 服务，但使用自动生成的临时 Collection：
 
 ```powershell
 uv run python -m app.rag.evaluate_cli `
-  --dataset evals/retrieval/sample_queries.jsonl `
+  --isolated `
+  --mode all `
+  --dataset evals/retrieval/business_queries.jsonl `
+  --corpus-manifest evals/retrieval/business_corpus.json `
+  --top-k 5 `
+  --candidate-k 30 `
+  --reranker-device cuda `
+  --report-dir evals/retrieval/reports/latest
+```
+
+`--keep-collection` 可以保留临时 Collection 供人工检查。指定 `--collection` 时，如果同名 Collection 已存在，评测器会拒绝覆盖。
+
+## 评测已有开发知识库
+
+不传 `--isolated` 时，评测器沿用原来的行为：查询当前配置的 Qdrant Collection，并从 MySQL 展开 Parent。
+
+```powershell
+uv run python -m app.rag.evaluate_cli `
   --mode both `
+  --dataset evals/retrieval/sample_queries.jsonl `
   --top-k 5 `
   --output evals/retrieval/latest-results.json
 ```
 
-`dense` 使用当前 Embedding 模型建立可比较基线；`hybrid` 使用相同 Dense 向量与 Qdrant BM25 多语言 Sparse Vector，通过 RRF 融合。评测文件按标题和章节路径匹配相关 Parent，因此测试文档可以使用任意 `document_id`。
+评测结果目录包含：
 
-`latest-results.json` 是本机运行产物，不应作为固定指标提交。正式调参前应扩展数据集，并把人工确认的相关 Parent 加入标签。
-
-`baseline-2026-09-02.json` 记录首次 V2 实测结果：Dense 的 MRR@5 为 `0.9167`，Hybrid RRF 的 MRR@5 为 `1.0`；两者的 Hit Rate@5 和 Recall@5 均为 `1.0`。该小样本只用于防止功能回退，不能替代更大规模的业务评测集。
+```text
+summary.json         完整运行元数据和指标
+query-details.jsonl  逐模式、逐 Query 候选明细
+report.html          可直接打开的可视化报告
+```
