@@ -1,0 +1,144 @@
+{
+  "documents": [
+    {
+      "document_key": "dealflow-01-platform-overview-current-v3-2",
+      "path": "knowledge/01-platform-overview-current.md",
+      "title": "DealFlow Platform Overview and Current Plan Boundaries",
+      "category": "platform",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-02-platform-overview-legacy-v2-4",
+      "path": "knowledge/02-platform-overview-legacy.md",
+      "title": "DealFlow Legacy Platform Overview and Retired Plans",
+      "category": "platform-history",
+      "version": "2.4"
+    },
+    {
+      "document_key": "dealflow-03-identity-access-control-v3-2",
+      "path": "knowledge/03-identity-access-control.md",
+      "title": "DealFlow Identity and Access Control Guide",
+      "category": "security",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-04-identity-access-migration-legacy-v1-9",
+      "path": "knowledge/04-identity-access-migration-legacy.md",
+      "title": "DealFlow Historical IAM and Migration Guide",
+      "category": "security-history",
+      "version": "1.9"
+    },
+    {
+      "document_key": "dealflow-05-encryption-key-data-protection-v3-2",
+      "path": "knowledge/05-encryption-key-data-protection.md",
+      "title": "DealFlow Encryption Key and Data Protection Standard",
+      "category": "security",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-06-audit-logging-security-operations-v3-2",
+      "path": "knowledge/06-audit-logging-security-operations.md",
+      "title": "DealFlow Audit Logging and Security Operations Manual",
+      "category": "security-operations",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-07-compliance-privacy-certifications-v3-2",
+      "path": "knowledge/07-compliance-privacy-certifications.md",
+      "title": "DealFlow Compliance Privacy and Certification Handbook",
+      "category": "compliance",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-08-availability-service-levels-v3-2",
+      "path": "knowledge/08-availability-service-levels.md",
+      "title": "DealFlow Availability and Service Level Policy",
+      "category": "availability",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-09-backup-recovery-disaster-recovery-v3-2",
+      "path": "knowledge/09-backup-recovery-disaster-recovery.md",
+      "title": "DealFlow Backup Recovery and Disaster Recovery Guide",
+      "category": "availability",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-10-deployment-models-v3-2",
+      "path": "knowledge/10-deployment-models.md",
+      "title": "DealFlow SaaS Dedicated and On-premises Deployment Guide",
+      "category": "deployment",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-11-network-security-boundaries-v3-2",
+      "path": "knowledge/11-network-security-boundaries.md",
+      "title": "DealFlow Network Connectivity and Security Boundary Guide",
+      "category": "network",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-12-data-residency-cross-region-v3-2",
+      "path": "knowledge/12-data-residency-cross-region.md",
+      "title": "DealFlow Data Residency and Cross-region Replication Policy",
+      "category": "privacy",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-13-api-webhook-service-accounts-v3-2",
+      "path": "knowledge/13-api-webhook-service-accounts.md",
+      "title": "DealFlow API Webhook and Service Account Reference",
+      "category": "integration",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-14-enterprise-integrations-v3-2",
+      "path": "knowledge/14-enterprise-integrations.md",
+      "title": "DealFlow CRM ERP and Collaboration Integration Catalog",
+      "category": "integration",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-15-performance-capacity-upload-limits-v3-2",
+      "path": "knowledge/15-performance-capacity-upload-limits.md",
+      "title": "DealFlow Performance Capacity and Upload Limits",
+      "category": "performance",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-16-rfp-proposal-workflow-v3-2",
+      "path": "knowledge/16-rfp-proposal-workflow.md",
+      "title": "DealFlow RFP and Proposal Workflow Governance",
+      "category": "workflow",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-17-knowledge-chunk-incremental-update-v3-2",
+      "path": "knowledge/17-knowledge-chunk-incremental-update.md",
+      "title": "DealFlow Knowledge Chunking and Incremental Update Architecture",
+      "category": "knowledge-management",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-18-support-incident-response-v3-2",
+      "path": "knowledge/18-support-incident-response.md",
+      "title": "DealFlow Support Plans and Incident Response Policy",
+      "category": "support",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-19-implementation-migration-training-v3-2",
+      "path": "knowledge/19-implementation-migration-training.md",
+      "title": "DealFlow Implementation Migration and Training Services",
+      "category": "implementation",
+      "version": "3.2"
+    },
+    {
+      "document_key": "dealflow-20-limitations-deprecations-roadmap-v3-2",
+      "path": "knowledge/20-limitations-deprecations-roadmap.md",
+      "title": "DealFlow Limitations Deprecations and Roadmap Register",
+      "category": "product-status",
+      "version": "3.2"
+    }
+  ]
+}
