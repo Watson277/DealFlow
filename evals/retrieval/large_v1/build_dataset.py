@@ -726,6 +726,7 @@ def write_generation_log() -> None:
 - Tokenizer: cl100k_base
 - Source data: fictional DealFlow product policies defined in catalog.md
 - Production RAG changes: none
+- Source generation does not invoke the parser, chunker, embedding service, or vector store
 
 ## Batches
 
@@ -742,12 +743,15 @@ def write_generation_log() -> None:
 - SLA, RTO, RPO, retention, capacity, and capability-state distractors are deliberately different.
 - Multi-evidence cases use two independently labeled sections.
 - Query wording is generated from business cues rather than copied from section headings.
+- Knowledge headings follow four reader-oriented business areas with three factual subsections each; heading count and paragraph length are not tuned to Chunker behavior.
+- Every long paragraph is unique, and each paragraph contributes a separate scope, procedure, exception, evidence, failure, responsibility, scenario, or change-control fact.
 
 ## Known limitations
 
 - The corpus is synthetic and tests retrieval discrimination, not legal sufficiency.
 - Core documents are Markdown only; PDF, DOCX, and OCR robustness remain separate evaluation concerns.
-- The local validator records structural and label integrity. Retrieval metrics require Qdrant, embedding, and reranker services.
+- The source validator checks the Markdown heading tree directly and never runs the Chunker. Runtime Parent and Child counts are recorded only by the isolated system evaluation.
+- Retrieval metrics require Qdrant, embedding, and reranker services.
 """
     (ROOT / "generation-log.md").write_text(content, encoding="utf-8")
 
