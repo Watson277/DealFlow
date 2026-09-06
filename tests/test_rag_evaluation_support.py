@@ -1,17 +1,114 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from app.rag.evaluate_cli import _requested_modes
+from app.rag.evaluate_cli import _evaluate_mode, _requested_modes
+from app.rag.evaluation import RetrievalEvaluationCase
 from app.rag.evaluation_corpus import load_corpus_manifest
 from app.rag.evaluation_report import write_evaluation_report
+from app.rag.retrieval import group_child_evidence
+from app.rag.vector_store import RetrievedEvidence
 
 
 def test_requested_modes_include_cross_encoder() -> None:
     assert _requested_modes("both") == ("dense", "hybrid")
     assert _requested_modes("all") == ("dense", "hybrid", "hybrid_reranker")
     assert _requested_modes("hybrid-reranker") == ("hybrid_reranker",)
+
+
+@pytest.mark.asyncio
+async def test_hybrid_reranker_ranks_children_before_parent_grouping(monkeypatch) -> None:
+    candidates = [
+        RetrievedEvidence(
+            point_id="rrf-leader",
+            document_id="document-1",
+            title="Guide",
+            version="1.0",
+            category="security",
+            page_number=1,
+            text="Broad authentication text.",
+            score=0.95,
+            parent_id="parent-1",
+        ),
+        RetrievedEvidence(
+            point_id="semantic-match",
+            document_id="document-1",
+            title="Guide",
+            version="1.0",
+            category="security",
+            page_number=1,
+            text="Exact SAML requirement answer.",
+            score=0.75,
+            parent_id="parent-1",
+        ),
+        RetrievedEvidence(
+            point_id="other-parent",
+            document_id="document-1",
+            title="Guide",
+            version="1.0",
+            category="security",
+            page_number=2,
+            text="Evidence from another parent.",
+            score=0.70,
+            parent_id="parent-2",
+        ),
+    ]
+
+    class FakeVectorStore:
+        async def search(self, *args, **kwargs):
+            return candidates
+
+    class FakeReranker:
+        async def rerank(self, query, evidence, *, limit):
+            assert [item.point_id for item in evidence] == [
+                "rrf-leader",
+                "semantic-match",
+                "other-parent",
+            ]
+            assert all(item.matched_child_text is None for item in evidence)
+            assert limit == 3
+            return [
+                replace(evidence[1], rerank_score=0.99),
+                replace(evidence[2], rerank_score=0.80),
+                replace(evidence[0], rerank_score=0.10),
+            ]
+
+    async def fake_expand(evidence, *, limit, indexed_corpus):
+        assert [item.point_id for item in evidence] == [
+            "semantic-match",
+            "other-parent",
+            "rrf-leader",
+        ]
+        assert limit == 2
+        assert indexed_corpus is None
+        return group_child_evidence(evidence)[:limit]
+
+    monkeypatch.setattr("app.rag.evaluate_cli._expand", fake_expand)
+    case = RetrievalEvaluationCase(
+        query_id="query-1",
+        query="Does the platform support SAML?",
+        category="security",
+        relevant=(),
+    )
+
+    result_sets, _ = await _evaluate_mode(
+        "hybrid_reranker",
+        cases=[case],
+        query_texts=[case.query],
+        vectors=[[0.1, 0.2]],
+        top_k=2,
+        candidate_k=3,
+        vector_store=FakeVectorStore(),  # type: ignore[arg-type]
+        reranker=FakeReranker(),  # type: ignore[arg-type]
+        indexed_corpus=None,
+    )
+
+    assert [item.point_id for item in result_sets[0]] == [
+        "semantic-match",
+        "other-parent",
+    ]
 
 
 def test_corpus_manifest_resolves_relative_files(tmp_path: Path) -> None:

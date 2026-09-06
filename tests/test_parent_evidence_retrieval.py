@@ -139,3 +139,36 @@ def test_child_evidence_grouping_keeps_best_ranked_hit_per_parent() -> None:
     grouped = group_child_evidence(evidence)
 
     assert [item.point_id for item in grouped] == ["best-child", "other-parent-child"]
+
+
+def test_child_evidence_grouping_uses_reranked_order() -> None:
+    evidence = [
+        _evidence(
+            point_id="semantic-match",
+            document_id="document-1",
+            parent_id="parent-1",
+            text="The exact answer selected by the Cross Encoder.",
+            score=0.70,
+        ),
+        _evidence(
+            point_id="other-parent-child",
+            document_id="document-1",
+            parent_id="parent-2",
+            text="Another relevant parent.",
+            score=0.85,
+        ),
+        _evidence(
+            point_id="rrf-leader",
+            document_id="document-1",
+            parent_id="parent-1",
+            text="The original Hybrid leader for this parent.",
+            score=0.95,
+        ),
+    ]
+
+    grouped = group_child_evidence(evidence)
+
+    assert [item.point_id for item in grouped] == [
+        "semantic-match",
+        "other-parent-child",
+    ]

@@ -205,15 +205,23 @@ async def _evaluate_mode(
             mode="dense" if mode == "dense" else "hybrid",
             limit=retrieve_limit,
         )
-        expanded = await _expand(
-            candidates,
-            limit=retrieve_limit,
-            indexed_corpus=indexed_corpus,
-        )
         if mode == "hybrid_reranker":
-            expanded = await reranker.rerank(query_text, expanded, limit=top_k)
+            reranked_children = await reranker.rerank(
+                query_text,
+                candidates,
+                limit=retrieve_limit,
+            )
+            expanded = await _expand(
+                reranked_children,
+                limit=top_k,
+                indexed_corpus=indexed_corpus,
+            )
         else:
-            expanded = expanded[:top_k]
+            expanded = await _expand(
+                candidates,
+                limit=top_k,
+                indexed_corpus=indexed_corpus,
+            )
         latencies_ms.append((perf_counter() - started) * 1000)
         result_sets.append(expanded)
     return result_sets, latencies_ms

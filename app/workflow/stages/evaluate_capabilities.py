@@ -127,17 +127,17 @@ class CapabilityProcessingService:
                         query_text=query_text,
                         mode="hybrid",
                     )
+                    evidence = await self.reranker.rerank(
+                        query_text,
+                        evidence,
+                        limit=self.settings.qdrant_hybrid_fusion_top_k,
+                    )
                     async with session.begin():
                         evidence = await expand_parent_evidence(
                             session,
                             evidence,
-                            limit=self.settings.qdrant_hybrid_fusion_top_k,
+                            limit=self.settings.qdrant_search_top_k,
                         )
-                    evidence = await self.reranker.rerank(
-                        query_text,
-                        evidence,
-                        limit=self.settings.qdrant_search_top_k,
-                    )
                     judgment = (
                         await self.judge.judge(requirement, evidence)
                         if evidence
