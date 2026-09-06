@@ -133,15 +133,30 @@ def evaluate_retrieval(
         discounted_cumulative_gain = 0.0
         candidate_reports: list[CandidateEvaluation] = []
         for rank, candidate in enumerate(ranked, start=1):
-            candidate_relevance = 0
-            for label_index, label in enumerate(case.relevant):
-                if _matches(candidate, label):
-                    matched_labels.add(label_index)
-                    candidate_relevance = max(candidate_relevance, label.relevance)
-                    if first_relevant_rank is None:
-                        first_relevant_rank = rank
-            if candidate_relevance:
-                discounted_cumulative_gain += _discounted_gain(candidate_relevance, rank)
+            candidate_label_indexes = {
+                label_index
+                for label_index, label in enumerate(case.relevant)
+                if _matches(candidate, label)
+            }
+            candidate_relevance = max(
+                (
+                    case.relevant[label_index].relevance
+                    for label_index in candidate_label_indexes
+                ),
+                default=0,
+            )
+            novel_relevance = max(
+                (
+                    case.relevant[label_index].relevance
+                    for label_index in candidate_label_indexes - matched_labels
+                ),
+                default=0,
+            )
+            if candidate_label_indexes and first_relevant_rank is None:
+                first_relevant_rank = rank
+            matched_labels.update(candidate_label_indexes)
+            if novel_relevance:
+                discounted_cumulative_gain += _discounted_gain(novel_relevance, rank)
             candidate_reports.append(
                 CandidateEvaluation(
                     rank=rank,
