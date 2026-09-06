@@ -392,12 +392,25 @@ def main() -> None:
     }
 
     runtime_evaluations: dict[str, object] = {}
+    stale_runtime_reports: list[str] = []
+    latest_source_mtime = max(
+        path.stat().st_mtime
+        for path in (
+            manifest_path,
+            ROOT / "queries-dev.jsonl",
+            ROOT / "queries-test.jsonl",
+            *knowledge_files,
+        )
+    )
     for split in ("dev", "test"):
         report_dir = ROOT.parent / "reports" / f"large-v1-{split}"
         summary_path = report_dir / "summary.json"
         details_path = report_dir / "query-details.jsonl"
         html_path = report_dir / "report.html"
         if not summary_path.is_file():
+            continue
+        if summary_path.stat().st_mtime < latest_source_mtime:
+            stale_runtime_reports.append(split)
             continue
         report = json.loads(summary_path.read_text(encoding="utf-8"))
         indexing = report.get("indexing") or {}
@@ -481,6 +494,7 @@ def main() -> None:
         "repeated_long_paragraphs": repeated_long_paragraphs,
         "catalog_fact_count": len(catalog_fact_ids),
         "system_evaluation_complete": system_evaluation_complete,
+        "stale_runtime_reports": stale_runtime_reports,
         "runtime_observations": runtime_evaluations,
         "known_system_limitations": ([
             "nDCG@5 exceeds 1.0 because the current evaluator can add gain for multiple Parent candidates matching one source-section label while the ideal gain includes that label once; recorded without changing production evaluation semantics."

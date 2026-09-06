@@ -1,53 +1,53 @@
 {
   "schema_version": "2.0",
-  "generated_at_utc": "2026-09-06T07:51:04.689679+00:00",
+  "generated_at_utc": "2026-09-06T08:19:41.724451+00:00",
   "validation_scope": "source data only; no parser, chunker, embedding, or vector store invoked",
   "tokenizer": "cl100k_base",
   "document_count": 20,
-  "total_tokens": 323680,
+  "total_tokens": 304303,
   "document_tokens": {
-    "knowledge/01-platform-overview-current.md": 19394,
-    "knowledge/02-platform-overview-legacy.md": 15093,
-    "knowledge/03-identity-access-control.md": 15087,
-    "knowledge/04-identity-access-migration-legacy.md": 13677,
-    "knowledge/05-encryption-key-data-protection.md": 16330,
-    "knowledge/06-audit-logging-security-operations.md": 16323,
-    "knowledge/07-compliance-privacy-certifications.md": 19390,
-    "knowledge/08-availability-service-levels.md": 17812,
-    "knowledge/09-backup-recovery-disaster-recovery.md": 17837,
-    "knowledge/10-deployment-models.md": 16353,
-    "knowledge/11-network-security-boundaries.md": 14831,
-    "knowledge/12-data-residency-cross-region.md": 14996,
-    "knowledge/13-api-webhook-service-accounts.md": 17745,
-    "knowledge/14-enterprise-integrations.md": 17833,
-    "knowledge/15-performance-capacity-upload-limits.md": 14874,
-    "knowledge/16-rfp-proposal-workflow.md": 16197,
-    "knowledge/17-knowledge-chunk-incremental-update.md": 16529,
-    "knowledge/18-support-incident-response.md": 14873,
-    "knowledge/19-implementation-migration-training.md": 14869,
-    "knowledge/20-limitations-deprecations-roadmap.md": 13637
+    "knowledge/01-platform-overview-current.md": 17415,
+    "knowledge/02-platform-overview-legacy.md": 14541,
+    "knowledge/03-identity-access-control.md": 14560,
+    "knowledge/04-identity-access-migration-legacy.md": 13587,
+    "knowledge/05-encryption-key-data-protection.md": 15280,
+    "knowledge/06-audit-logging-security-operations.md": 15281,
+    "knowledge/07-compliance-privacy-certifications.md": 17423,
+    "knowledge/08-availability-service-levels.md": 16293,
+    "knowledge/09-backup-recovery-disaster-recovery.md": 16458,
+    "knowledge/10-deployment-models.md": 15281,
+    "knowledge/11-network-security-boundaries.md": 14227,
+    "knowledge/12-data-residency-cross-region.md": 14431,
+    "knowledge/13-api-webhook-service-accounts.md": 16202,
+    "knowledge/14-enterprise-integrations.md": 16308,
+    "knowledge/15-performance-capacity-upload-limits.md": 14269,
+    "knowledge/16-rfp-proposal-workflow.md": 15096,
+    "knowledge/17-knowledge-chunk-incremental-update.md": 15537,
+    "knowledge/18-support-incident-response.md": 14277,
+    "knowledge/19-implementation-migration-training.md": 14268,
+    "knowledge/20-limitations-deprecations-roadmap.md": 13569
   },
   "document_token_target_deviation_percent": {
-    "knowledge/01-platform-overview-current.md": 7.744,
-    "knowledge/02-platform-overview-legacy.md": 7.807,
-    "knowledge/03-identity-access-control.md": 7.764,
-    "knowledge/04-identity-access-migration-legacy.md": 13.975,
-    "knowledge/05-encryption-key-data-protection.md": 8.867,
-    "knowledge/06-audit-logging-security-operations.md": 8.82,
-    "knowledge/07-compliance-privacy-certifications.md": 7.722,
-    "knowledge/08-availability-service-levels.md": 11.325,
-    "knowledge/09-backup-recovery-disaster-recovery.md": 11.481,
-    "knowledge/10-deployment-models.md": 9.02,
-    "knowledge/11-network-security-boundaries.md": 5.936,
-    "knowledge/12-data-residency-cross-region.md": 7.114,
-    "knowledge/13-api-webhook-service-accounts.md": 10.906,
-    "knowledge/14-enterprise-integrations.md": 11.456,
-    "knowledge/15-performance-capacity-upload-limits.md": 6.243,
-    "knowledge/16-rfp-proposal-workflow.md": 7.98,
-    "knowledge/17-knowledge-chunk-incremental-update.md": 10.193,
-    "knowledge/18-support-incident-response.md": 6.236,
-    "knowledge/19-implementation-migration-training.md": 6.207,
-    "knowledge/20-limitations-deprecations-roadmap.md": 4.9
+    "knowledge/01-platform-overview-current.md": -3.25,
+    "knowledge/02-platform-overview-legacy.md": 3.864,
+    "knowledge/03-identity-access-control.md": 4.0,
+    "knowledge/04-identity-access-migration-legacy.md": 13.225,
+    "knowledge/05-encryption-key-data-protection.md": 1.867,
+    "knowledge/06-audit-logging-security-operations.md": 1.873,
+    "knowledge/07-compliance-privacy-certifications.md": -3.206,
+    "knowledge/08-availability-service-levels.md": 1.831,
+    "knowledge/09-backup-recovery-disaster-recovery.md": 2.863,
+    "knowledge/10-deployment-models.md": 1.873,
+    "knowledge/11-network-security-boundaries.md": 1.621,
+    "knowledge/12-data-residency-cross-region.md": 3.079,
+    "knowledge/13-api-webhook-service-accounts.md": 1.263,
+    "knowledge/14-enterprise-integrations.md": 1.925,
+    "knowledge/15-performance-capacity-upload-limits.md": 1.921,
+    "knowledge/16-rfp-proposal-workflow.md": 0.64,
+    "knowledge/17-knowledge-chunk-incremental-update.md": 3.58,
+    "knowledge/18-support-incident-response.md": 1.979,
+    "knowledge/19-implementation-migration-training.md": 1.914,
+    "knowledge/20-limitations-deprecations-roadmap.md": 4.377
   },
   "dev_query_count": 105,
   "test_query_count": 45,
@@ -174,86 +174,13 @@
   "fact_ids_leaked_into_queries": [],
   "repeated_long_paragraphs": [],
   "catalog_fact_count": 240,
-  "system_evaluation_complete": true,
-  "runtime_observations": {
-    "dev": {
-      "artifacts_complete": true,
-      "document_count": 20,
-      "observed_parent_count": 581,
-      "observed_child_count": 1538,
-      "observed_qdrant_point_count": 1538,
-      "index_elapsed_ms": 33457.79535599286,
-      "modes": {
-        "dense": {
-          "query_count": 105,
-          "hit_rate_at_5": 0.9714285714285714,
-          "mrr_at_5": 0.8539682539682539,
-          "recall_at_5": 0.9523809523809523,
-          "ndcg_at_5": 1.2419227147913774,
-          "mean_latency_ms": 4.624549199139611,
-          "p95_latency_ms": 5.088866979349405
-        },
-        "hybrid": {
-          "query_count": 105,
-          "hit_rate_at_5": 1.0,
-          "mrr_at_5": 0.923015873015873,
-          "recall_at_5": 0.9904761904761905,
-          "ndcg_at_5": 1.331211441775147,
-          "mean_latency_ms": 19.299828399726678,
-          "p95_latency_ms": 22.427510004490614
-        },
-        "hybrid_reranker": {
-          "query_count": 105,
-          "hit_rate_at_5": 1.0,
-          "mrr_at_5": 0.953968253968254,
-          "recall_at_5": 0.9952380952380953,
-          "ndcg_at_5": 1.3457892219391405,
-          "mean_latency_ms": 940.8851574100221,
-          "p95_latency_ms": 565.0144990067929
-        }
-      }
-    },
-    "test": {
-      "artifacts_complete": true,
-      "document_count": 20,
-      "observed_parent_count": 581,
-      "observed_child_count": 1538,
-      "observed_qdrant_point_count": 1538,
-      "index_elapsed_ms": 32931.143308989704,
-      "modes": {
-        "dense": {
-          "query_count": 45,
-          "hit_rate_at_5": 0.9333333333333333,
-          "mrr_at_5": 0.8637037037037038,
-          "recall_at_5": 0.9222222222222223,
-          "ndcg_at_5": 1.165886484254804,
-          "mean_latency_ms": 5.435091312715991,
-          "p95_latency_ms": 7.065868005156517
-        },
-        "hybrid": {
-          "query_count": 45,
-          "hit_rate_at_5": 1.0,
-          "mrr_at_5": 0.9555555555555556,
-          "recall_at_5": 0.9888888888888889,
-          "ndcg_at_5": 1.2811938444360151,
-          "mean_latency_ms": 19.524966820608824,
-          "p95_latency_ms": 22.801287996117026
-        },
-        "hybrid_reranker": {
-          "query_count": 45,
-          "hit_rate_at_5": 1.0,
-          "mrr_at_5": 0.9888888888888889,
-          "recall_at_5": 1.0,
-          "ndcg_at_5": 1.3757980192957406,
-          "mean_latency_ms": 1128.9944247969995,
-          "p95_latency_ms": 548.4966560034081
-        }
-      }
-    }
-  },
-  "known_system_limitations": [
-    "nDCG@5 exceeds 1.0 because the current evaluator can add gain for multiple Parent candidates matching one source-section label while the ideal gain includes that label once; recorded without changing production evaluation semantics."
+  "system_evaluation_complete": false,
+  "stale_runtime_reports": [
+    "dev",
+    "test"
   ],
+  "runtime_observations": {},
+  "known_system_limitations": [],
   "freeze": {
     "queries_test_sha256": "120cdfd0d52742aca55cb70448c5a497915d324412f06aa12955c2ee2288bd67",
     "corpus_manifest_sha256": "c6920af1384cde970669a1be42fa609b95c203ae832ddd47c66047231b536dad"
