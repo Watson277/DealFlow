@@ -80,7 +80,7 @@ def test_detailed_report_writes_json_jsonl_and_html(tmp_path: Path) -> None:
                 "mean_ndcg": 1.0,
                 "mean_latency_ms": 12.5,
                 "p95_latency_ms": 12.5,
-                "queries": [
+                "queries": (
                     {
                         "query_id": "query-1",
                         "query": "Support <SAML>?",
@@ -89,7 +89,7 @@ def test_detailed_report_writes_json_jsonl_and_html(tmp_path: Path) -> None:
                         "recall": 1.0,
                         "normalized_discounted_cumulative_gain": 1.0,
                         "elapsed_ms": 12.5,
-                        "candidates": [
+                        "candidates": (
                             {
                                 "rank": 1,
                                 "relevant": True,
@@ -100,10 +100,10 @@ def test_detailed_report_writes_json_jsonl_and_html(tmp_path: Path) -> None:
                                 "rerank_score": 0.8,
                                 "matched_child_preview": "SAML <2.0>",
                                 "text_preview": "Parent",
-                            }
-                        ],
-                    }
-                ],
+                            },
+                        ),
+                    },
+                ),
             }
         },
     }

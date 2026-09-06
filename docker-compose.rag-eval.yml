@@ -52,3 +52,4 @@ services:
 volumes:
   huggingface_cache:
     name: dealflow-huggingface-cache
+    external: true

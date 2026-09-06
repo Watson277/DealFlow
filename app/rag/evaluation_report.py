@@ -26,7 +26,7 @@ def write_evaluation_report(
             if not isinstance(report, dict):
                 continue
             queries = report.get("queries")
-            if not isinstance(queries, list):
+            if not isinstance(queries, list | tuple):
                 continue
             detail_lines.extend(
                 json.dumps({"mode": mode, **query}, ensure_ascii=False)
@@ -77,7 +77,7 @@ def _render_html(payload: dict[str, object]) -> str:
                 "</tr>"
             )
             queries = raw_report.get("queries")
-            if isinstance(queries, list):
+            if isinstance(queries, list | tuple):
                 query_sections.append(_query_section(str(mode), queries))
 
     return f"""<!doctype html>
@@ -115,7 +115,7 @@ def _render_html(payload: dict[str, object]) -> str:
 """
 
 
-def _query_section(mode: str, queries: list[Any]) -> str:
+def _query_section(mode: str, queries: list[Any] | tuple[Any, ...]) -> str:
     cards: list[str] = [f"<h3>{_escape(mode)}</h3>"]
     for raw_query in queries:
         if not isinstance(raw_query, dict):
@@ -124,7 +124,7 @@ def _query_section(mode: str, queries: list[Any]) -> str:
         status = '<span class="ok">HIT</span>' if hit else '<span class="miss">MISS</span>'
         candidates = raw_query.get("candidates")
         candidate_rows = ""
-        if isinstance(candidates, list):
+        if isinstance(candidates, list | tuple):
             candidate_rows = "".join(
                 _candidate_row(candidate)
                 for candidate in candidates
