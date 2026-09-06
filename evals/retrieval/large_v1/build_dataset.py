@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -135,6 +136,22 @@ SPECIAL_FACTS = {
     "Planned Mobile Offline Mode": ("Mobile offline mode is a roadmap candidate for 2027 and is not currently supported, orderable, or covered by SLA.", "The responsive web application works online on mobile devices but has no offline cache.", "current status of working without connectivity on mobile"),
 }
 
+CUE_OVERRIDES = {
+    "Data Plane Isolation": "isolating a tenant's runtime data plane",
+    "OpenID Connect Federation": "sign-in through an OpenID Connect identity provider",
+    "Multi-factor Authentication": "requiring an additional verification factor for interactive sign-in",
+    "Role-based Access Control": "assigning permissions through reusable roles",
+    "Platform-managed Keys": "provider-controlled encryption keys",
+    "Authentication Logs": "records of successful and failed sign-in attempts",
+    "Monthly Measurement": "the monthly service-uptime calculation",
+    "Point-in-time Recovery": "restoring a database to a chosen timestamp",
+    "Dedicated RTO": "the recovery-time target for a Dedicated tenant",
+    "OAuth Client Credentials": "non-interactive OAuth client authentication",
+    "Webhook Signatures": "verifying that an outbound webhook came from DealFlow",
+    "Sustained API Throughput": "the continuous API request rate",
+    "Qdrant Point Model": "the vector and sparse payload stored for each searchable unit",
+}
+
 
 QUERY_TYPE_COUNTS = {
     "direct": 55,
@@ -179,8 +196,8 @@ def business_cue(section: str) -> str:
         ("Commitment", "contractual promise"),
         ("Target", "operating objective"),
         ("Scope", "coverage boundary"),
-        ("Responsibility", "division of operational duties"),
         ("Responsibilities", "division of operational duties"),
+        ("Responsibility", "division of operational duties"),
         ("Migration", "move from an older configuration"),
         ("Retention", "period for keeping records"),
         ("Authentication", "verifying machine or user identity"),
@@ -192,7 +209,7 @@ def business_cue(section: str) -> str:
     )
     cue = section
     for source, target in replacements:
-        cue = cue.replace(source, target)
+        cue = re.sub(rf"\b{re.escape(source)}\b", target, cue, flags=re.IGNORECASE)
     return cue.casefold()
 
 
@@ -230,6 +247,7 @@ def make_fact(document: DocumentSpec, section: str, index: int) -> Fact:
     current_fact, distractor, cue = SPECIAL_FACTS.get(
         section, (default_fact, default_distractor, default_cue)
     )
+    cue = CUE_OVERRIDES.get(section, cue)
     if is_special:
         plan = "Plan-specific; see fact rule"
         if not document.superseded and not any(
@@ -497,7 +515,23 @@ TEST_MULTI_TEMPLATES = (
     "Can {cue1} and {cue2} be satisfied together? Keep their subscription scope and exceptions separate.",
     "Procurement acceptance checks {cue1} as well as {cue2}; state the capability status and ownership of each.",
 )
-ABBREVIATIONS = ("SLA", "RTO/RPO", "SAML", "SCIM", "CMK", "SIEM", "RBAC", "API RPS", "SSO", "DR", "DPA", "OIDC", "KMS", "VPN", "RRF")
+ABBREVIATION_BY_SECTION = {
+    "OpenID Connect Federation": "OIDC",
+    "Multi-factor Authentication": "MFA",
+    "Role-based Access Control": "RBAC",
+    "Platform-managed Keys": "KMS",
+    "Authentication Logs": "SIEM",
+    "GDPR Roles": "DPA",
+    "Monthly Measurement": "SLA",
+    "Point-in-time Recovery": "PITR",
+    "Dedicated RTO": "RTO/RPO",
+    "Site-to-site VPN": "VPN",
+    "PrivateLink Connectivity": "AWS PrivateLink",
+    "OAuth Client Credentials": "OAuth 2.0",
+    "Webhook Signatures": "HMAC",
+    "Sustained API Throughput": "API RPS",
+    "Qdrant Point Model": "Dense + BM25",
+}
 
 
 def _difficulty_sequence(total: dict[str, int]) -> list[str]:
@@ -505,6 +539,11 @@ def _difficulty_sequence(total: dict[str, int]) -> list[str]:
     for difficulty in ("easy", "medium", "hard"):
         values.extend([difficulty] * total[difficulty])
     return values
+
+
+def query_id(query_type: str, fact: Fact) -> str:
+    semantic_name = re.sub(r"[^a-z0-9]+", "-", fact.section.casefold()).strip("-")
+    return f"{query_type}-{fact.document.category}-{semantic_name}"
 
 
 def make_query_text(
@@ -528,7 +567,10 @@ def make_query_text(
     if query_type == "hard-negative":
         return hard_templates[index % len(hard_templates)].format(cue=fact.cue, distractor=fact.distractor)
     if query_type == "mixed":
-        return mixed_templates[index % len(mixed_templates)].format(cue=fact.cue, abbr=ABBREVIATIONS[index % len(ABBREVIATIONS)])
+        return mixed_templates[index % len(mixed_templates)].format(
+            cue=fact.cue,
+            abbr=ABBREVIATION_BY_SECTION[fact.section],
+        )
     if query_type == "numeric":
         return numeric_templates[index % len(numeric_templates)].format(cue=fact.cue)
     if query_type == "multi-evidence" and second is not None:
@@ -575,6 +617,7 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
     )
     numeric_facts = [by_section[name] for name in numeric_sections]
     multi_pairs = [(by_section[left], by_section[right]) for left, right in multi_section_pairs]
+    mixed_facts = [by_section[name] for name in ABBREVIATION_BY_SECTION]
     reserved = {
         fact.fact_id
         for fact in numeric_facts
@@ -583,6 +626,9 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
         fact.fact_id
         for pair in multi_pairs
         for fact in pair
+    } | {
+        fact.fact_id
+        for fact in mixed_facts
     }
     general_facts = [fact for fact in ordered if fact.fact_id not in reserved]
     general_offset = 0
@@ -602,6 +648,9 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
         elif query_type == "multi-evidence":
             selected_facts = [pair[0] for pair in multi_pairs]
             selected_seconds = [pair[1] for pair in multi_pairs]
+        elif query_type == "mixed":
+            selected_facts = mixed_facts
+            selected_seconds = [None] * count
         else:
             selected_facts = general_facts[general_offset : general_offset + count]
             selected_seconds = [None] * count
@@ -623,7 +672,7 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
                     "relevance": 2,
                 })
             payload: dict[str, object] = {
-                "query_id": f"{query_type}-{fact.fact_id.lower()}-{local_index + 1:03d}",
+                "query_id": query_id(query_type, fact),
                 "query": make_query_text(
                     query_type,
                     fact,
