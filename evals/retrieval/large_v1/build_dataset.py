@@ -1,16 +1,14 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import argparse
 import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
 
-import tiktoken
-
 ROOT = Path(__file__).resolve().parent
 KNOWLEDGE_DIR = ROOT / "knowledge"
-ENCODING = tiktoken.get_encoding("cl100k_base")
 BUILD_SEED = 20260906
 
 
@@ -68,15 +66,6 @@ DOCS = (
     DocumentSpec(20, "20-limitations-deprecations-roadmap.md", "DealFlow Limitations Deprecations and Roadmap Register", "product-status", "3.2", 13_000, "product status", _sections("Current Supported Capabilities|Enterprise-only Capabilities|Custom Development Boundary|Professional Services Boundary|Roadmap Candidate Policy|Explicitly Unsupported Features|Deprecated API Versions|Retired Authentication Methods|Legacy Export Retirement|Planned Mobile Offline Mode|Unsupported Air-gapped SaaS|Status Communication")),
 )
 
-
-EXTRA_TOPICS = (
-    "Exception Governance",
-    "Evidence and Reporting",
-    "Change Control",
-    "Boundary Conditions",
-    "Regional Operations",
-    "Assurance Reviews",
-)
 
 STATUSES = (
     "standard capability",
@@ -173,17 +162,38 @@ DEV_TOTALS = {
 }
 
 
-def token_count(text: str) -> int:
-    return len(ENCODING.encode(text, disallowed_special=()))
-
-
 def all_sections(document: DocumentSpec) -> tuple[str, ...]:
-    needed = document.target_tokens // 1_000
-    extras = tuple(f"{document.domain.title()} {name}" for name in EXTRA_TOPICS)
-    result = document.core_sections + extras
-    if len(result) < needed:
-        raise ValueError(f"not enough section names for {document.title}")
-    return result[:needed]
+    """Return business topics without using token or chunk targets."""
+
+    return document.core_sections
+
+
+def business_cue(section: str) -> str:
+    replacements = (
+        ("Current", "presently offered"),
+        ("Legacy", "earlier-generation"),
+        ("Plan", "subscription"),
+        ("Entitlements", "included capabilities"),
+        ("Governance", "oversight rules"),
+        ("Availability", "service uptime"),
+        ("Commitment", "contractual promise"),
+        ("Target", "operating objective"),
+        ("Scope", "coverage boundary"),
+        ("Responsibility", "division of operational duties"),
+        ("Responsibilities", "division of operational duties"),
+        ("Migration", "move from an older configuration"),
+        ("Retention", "period for keeping records"),
+        ("Authentication", "verifying machine or user identity"),
+        ("Provisioning", "directory-driven account management"),
+        ("Deletion", "permanent removal"),
+        ("Deprecated", "withdrawn"),
+        ("Retired", "no-longer-offered"),
+        ("Evidence", "proof available to an assessor"),
+    )
+    cue = section
+    for source, target in replacements:
+        cue = cue.replace(source, target)
+    return cue.casefold()
 
 
 def make_fact(document: DocumentSpec, section: str, index: int) -> Fact:
@@ -215,10 +225,18 @@ def make_fact(document: DocumentSpec, section: str, index: int) -> Fact:
         f"The adjacent {document.domain} control uses a {WINDOWS[(document.number + index + 3) % len(WINDOWS)]}-day "
         f"window and applies to {PLANS[(index + 1) % len(PLANS)]}; those values are not interchangeable."
     )
-    default_cue = section.lower()
+    default_cue = business_cue(section)
+    is_special = section in SPECIAL_FACTS
     current_fact, distractor, cue = SPECIAL_FACTS.get(
         section, (default_fact, default_distractor, default_cue)
     )
+    if is_special:
+        plan = "Plan-specific; see fact rule"
+        if not document.superseded and not any(
+            word in section_folded
+            for word in ("roadmap", "planned", "unsupported", "deprecated", "retired")
+        ):
+            status = "standard or plan-limited as stated"
     critical = document.category in {
         "security", "security-operations", "compliance", "availability", "privacy",
         "performance", "knowledge-management",
@@ -234,49 +252,79 @@ def build_facts() -> list[Fact]:
     return facts
 
 
-def _record_paragraph(fact: Fact, record: int) -> str:
-    owner = ("Product Operations", "Security Assurance", "Regional Reliability", "Customer Success", "Platform Engineering")[(fact.document.number + record) % 5]
-    channel = ("tenant registry", "signed audit export", "change ticket", "assurance workbook", "regional control ledger")[(fact.section_index + record) % 5]
-    state = ("proposed", "approved", "active", "suspended", "retired")[(record + fact.document.number) % 5]
-    threshold = WINDOWS[(record + fact.section_index + fact.document.number) % len(WINDOWS)]
-    cadence = FREQUENCIES[(record * 2 + fact.document.number) % len(FREQUENCIES)]
-    cadence_unit = "hour" if cadence == 1 else "hours"
+OWNERS = (
+    "Product Operations",
+    "Security Assurance",
+    "Regional Reliability",
+    "Customer Success",
+    "Platform Engineering",
+)
+APPROVERS = (
+    "service owner",
+    "tenant security administrator",
+    "regional operations lead",
+    "change advisory board",
+    "data protection officer",
+)
+ARTIFACTS = (
+    "signed configuration export",
+    "tenant control report",
+    "UTC-stamped change ticket",
+    "regional assurance workbook",
+    "machine-readable audit bundle",
+)
+REGIONS = ("Frankfurt", "Virginia", "Singapore", "Sydney", "mainland China")
+
+
+def group_heading(document: DocumentSpec, group_index: int) -> str:
+    suffixes = (
+        "Scope and Eligibility",
+        "Configuration and Operations",
+        "Limits and Exception Handling",
+        "Evidence and Lifecycle Assurance",
+    )
+    return f"{document.domain.title()} {suffixes[group_index]}"
+
+
+def section_path(fact: Fact) -> tuple[str, str, str]:
     return (
-        f"Control record {fact.fact_id}-R{record:02d} covers a {fact.document.domain} scenario in the {state} state. "
-        f"{owner} owns the decision, records the applicable edition and region in the {channel}, and checks "
-        f"the evidence every {cadence} {cadence_unit} during an active exception. The record must be reviewed within "
-        f"{threshold} days, names the accountable approver, and preserves the previous value so an assessor can "
-        f"distinguish a current rule from a historical one. If the subscription, region, or capability status does "
-        f"not match {fact.fact_id}, operators must reject automatic inheritance and evaluate the neighboring control "
-        f"on its own terms. This record is evidence for {fact.section.lower()}, not for the similarly worded "
-        f"restriction described elsewhere in the corpus."
+        fact.document.title,
+        group_heading(fact.document, fact.section_index // 3),
+        fact.section,
     )
 
 
-def render_section(fact: Fact, desired_tokens: int) -> str:
+def render_section(fact: Fact) -> str:
+    owner = OWNERS[(fact.document.number + fact.section_index) % len(OWNERS)]
+    approver = APPROVERS[(fact.document.number * 2 + fact.section_index) % len(APPROVERS)]
+    artifact = ARTIFACTS[(fact.section_index + fact.document.number) % len(ARTIFACTS)]
+    region = REGIONS[(fact.section_index + fact.document.number * 2) % len(REGIONS)]
+    alternate_region = REGIONS[(fact.section_index + fact.document.number * 2 + 2) % len(REGIONS)]
+    review_days = WINDOWS[(fact.document.number + fact.section_index * 2) % len(WINDOWS)]
+    exception_days = WINDOWS[(fact.section_index + 4) % len(WINDOWS)]
+    evidence_hours = FREQUENCIES[(fact.document.number * 3 + fact.section_index) % len(FREQUENCIES)]
+    notice_days = WINDOWS[(fact.document.number + fact.section_index + 5) % len(WINDOWS)]
     paragraphs = [
-        f"Fact {fact.fact_id}. {fact.current_fact}",
-        f"Scope boundary. {fact.distractor} The authoritative scope is the named plan, region, version, and capability state; a broader interpretation is not permitted.",
-        f"Decision procedure. A proposal response must state whether this is standard, plan-limited, custom, professional-services delivered, planned, unsupported, or deprecated. It must also preserve every number and unit attached to {fact.fact_id}.",
-        "Evidence rule. Administrators can export the governing configuration, its UTC effective time, the approving role, and the last verification result. Screenshots without tenant, version, and timestamp context are supporting material rather than authoritative evidence.",
+        fact.current_fact,
+        f"Applicability and contract treatment. The controlling dimensions are the contracted edition, deployment model, data region, effective version, and recorded capability state. For this policy area the catalog classification is {fact.status}, with the commercial scope recorded as {fact.plan}. A sales response may narrow that scope for a customer, but it may not silently broaden it. If an order form and this guide disagree, operations pauses activation and asks the {approver} to resolve the discrepancy in writing.",
+        f"Configuration workflow. {owner} opens the governing record before the setting is enabled, records the tenant and subscription, selects the authorized region, and links the approval. A second operator validates the resulting control in {region}; production use begins only after the {artifact} shows the expected value and a successful timestamp. The configuration is rechecked every {review_days} days and after any edition, identity-provider, network, or residency change that could alter eligibility.",
+        f"Exception handling. An exception must identify the precise unmet condition, the compensating control, an accountable owner, and an expiry no later than {exception_days} days after approval. Renewal is a new decision rather than an automatic extension. A roadmap statement cannot serve as a compensating control, and a professional-services estimate does not prove that a capability is active. When the exception expires, the system either restores the documented baseline or disables the dependent workflow.",
+        f"Operational verification. The service samples the active setting every {evidence_hours} hours while a change is open and compares it with the tenant registry. A mismatch creates a case for {owner}, preserves the previous and proposed values, and blocks a compliance export from showing the control as passed. The verification result is scoped to this capability; it does not certify adjacent identity, logging, resilience, or integration controls that happen to use a similar term.",
+        f"Evidence and auditability. The customer evidence package contains the {artifact}, effective version, UTC activation time, approving role, last verification result, and any open exception. Tenant secrets, personal data, and raw customer content are redacted, but the plan, region, status, threshold, and unit remain visible. A screenshot without tenant and version context is supporting material only. Reviewers can determine whether the rule was current, historical, planned, custom, or unavailable at the time.",
+        f"Failure and recovery. If verification fails, new dependent operations stop while already committed records remain readable. The owner triages whether the cause is configuration drift, an expired entitlement, a regional restriction, or a version mismatch. Customer-impacting failures are acknowledged through the contracted support channel, and restoration requires a clean verification run plus approval from the {approver}. Recovery of this control does not reset a separate SLA, RTO, RPO, log-retention, or data-residency clock.",
+        "Customer responsibilities. The customer supplies accurate tenant identifiers, maintains authorized contacts, and reports subscription or regional changes before the control is relied on in production. Where the customer operates an external identity provider, key service, network appliance, integration platform, or on-premises component, its availability remains a customer dependency. DealFlow remains responsible for enforcing the documented hosted boundary and for producing evidence about the portion it operates.",
+        f"A conforming procurement example is a tenant whose order form matches {fact.plan}, whose control is activated in {region}, and whose evidence package identifies the current version. The assessor accepts the result only for {fact.cue}; the same package cannot be reused to claim a different capability. If the customer later moves to {alternate_region}, the old verification remains historical evidence and a new regional check is required.",
+        f"A non-conforming example is an implementation team citing a similarly named policy with a different number, lifecycle state, or subscription. {fact.distractor} The discrepancy is material even when both statements appear in official DealFlow documents, because the older or neighboring statement answers a different business condition. The response is corrected before proposal approval and the rejected interpretation remains in the audit trail.",
+        f"Change management. Material changes to eligibility, numeric limits, region coverage, or capability status are announced at least {notice_days} days before they take effect unless an urgent security correction requires a shorter window. The notice names the old value, new value, affected subscriptions, migration action, and authoritative replacement document. Existing exceptions retain their original expiry but are reassessed against the new baseline. Historical text stays available for audit purposes and is marked superseded.",
     ]
-    record = 1
-    while True:
-        candidate = _record_paragraph(fact, record)
-        proposed = "\n\n".join([*paragraphs, candidate])
-        if token_count(proposed) > desired_tokens - 18:
-            break
-        paragraphs.append(candidate)
-        record += 1
-    tail_options = (
-        f"Registry note {fact.fact_id}-T: the active value is checked against the contracted edition before publication.",
-        f"Assurance note {fact.fact_id}-T: failures open a tracked exception with an owner and expiry date.",
-        f"Change note {fact.fact_id}-T: draft roadmap language cannot be presented as a current commitment.",
-    )
-    for tail in tail_options:
-        proposed = "\n\n".join([*paragraphs, tail])
-        if token_count(proposed) <= desired_tokens:
-            paragraphs.append(tail)
+    case_depth = {12_000: 1, 13_000: 2, 14_000: 2, 15_000: 3, 16_000: 4, 18_000: 5}[fact.document.target_tokens]
+    for case_index in range(case_depth):
+        case_region = REGIONS[(fact.document.number + fact.section_index + case_index) % len(REGIONS)]
+        case_owner = OWNERS[(fact.document.number + fact.section_index + case_index + 2) % len(OWNERS)]
+        case_window = WINDOWS[(fact.document.number + fact.section_index + case_index + 1) % len(WINDOWS)]
+        paragraphs.append(
+            f"Decision example {case_index + 1}. A {case_region} tenant asks whether {fact.cue} can be represented as a current contractual capability after a subscription or configuration change. {case_owner} checks the effective guide, confirms the capability state and applicable unit, and compares the request with the explicit exclusion in this subsection. If every prerequisite is met, the decision is valid for {case_window} days before routine reassessment; otherwise the request is recorded as unavailable, custom, or exception-bound rather than being rounded up to standard support. The customer-readable rationale links to the evidence artifact so a later reviewer can reproduce the decision without undocumented product knowledge."
+        )
     return "\n\n".join(paragraphs)
 
 
@@ -284,10 +332,15 @@ def render_document(document: DocumentSpec, facts: list[Fact]) -> str:
     doc_facts = [fact for fact in facts if fact.document == document]
     header = [f"# {document.title}", ""]
     if document.superseded:
+        replacement = (
+            "DealFlow Platform Overview and Current Plan Boundaries"
+            if document.number == 2
+            else "DealFlow Identity and Access Control Guide"
+        )
         header.extend([
             "Document status: superseded",
             "Effective period: 2024-01-01 to 2025-06-30",
-            "Replaced by: DealFlow Platform Overview and Current Plan Boundaries and the corresponding current domain guide",
+            f"Replaced by: {replacement}",
             "",
         ])
     else:
@@ -297,21 +350,23 @@ def render_document(document: DocumentSpec, facts: list[Fact]) -> str:
             f"Product version: {document.version}",
             "",
         ])
-    header_text = "\n".join(header)
-    available = document.target_tokens - token_count(header_text)
-    base = available // len(doc_facts)
-    remainder = available % len(doc_facts)
-    rendered = [header_text.rstrip()]
-    for index, fact in enumerate(doc_facts):
-        section_target = base + (1 if index < remainder else 0)
-        # Keep one deliberately compact section per document. This preserves the
-        # corpus token target while preventing every section from mechanically
-        # producing four children at the current 350-token child budget.
-        if index == 0:
-            section_target = int(section_target * 0.72)
-        heading = f"## {fact.section}\n\n"
-        body = render_section(fact, max(500, section_target - token_count(heading)))
-        rendered.append(f"## {fact.section}\n\n{body}")
+    rendered = ["\n".join(header).rstrip()]
+    for group_index in range(4):
+        grouped = doc_facts[group_index * 3 : group_index * 3 + 3]
+        heading = group_heading(document, group_index)
+        summary_rows = "\n".join(
+            f"| {fact.section} | {fact.status} | {fact.plan} |" for fact in grouped
+        )
+        rendered.append(
+            f"## {heading}\n\n"
+            f"This business area brings together {', '.join(fact.section for fact in grouped)}. "
+            "The grouping follows operational ownership and reader workflow; each subsection retains its own plan, version, status, limits, exceptions, and evidence.\n\n"
+            "| Topic | Capability state | Commercial scope |\n"
+            "|---|---|---|\n"
+            f"{summary_rows}"
+        )
+        for fact in grouped:
+            rendered.append(f"### {fact.section}\n\n{render_section(fact)}")
     return "\n\n".join(rendered).strip() + "\n"
 
 
@@ -349,15 +404,21 @@ def write_catalog(facts: list[Fact]) -> None:
         "",
         "## Fact matrix",
         "",
-        "| Fact ID | Current fact | Plan / scope | Version | Evidence section | Confusable but incorrect fact | Critical candidate |",
-        "|---|---|---|---|---|---|---|",
+        "| Fact ID | Fact description | Plan / scope | Effective version or time | Capability state | Evidence section path | Confusable but incorrect fact | Critical candidate |",
+        "|---|---|---|---|---|---|---|---|",
     ])
     for fact in facts:
         clean_fact = fact.current_fact.replace("|", "/")
         clean_distractor = fact.distractor.replace("|", "/")
+        effective = (
+            "v2.4 or v1.9; 2024-01-01 to 2025-06-30"
+            if fact.document.superseded
+            else f"v{fact.document.version}; effective 2025-07-01"
+        )
         lines.append(
-            f"| {fact.fact_id} | {clean_fact} | {fact.plan} | {fact.document.version} | "
-            f"{fact.document.title} → {fact.section} | {clean_distractor} | {'yes' if fact.critical_candidate else 'no'} |"
+            f"| {fact.fact_id} | {clean_fact} | {fact.plan} | {effective} | {fact.status} | "
+            f"{' → '.join(section_path(fact))} | {clean_distractor} | "
+            f"{'yes' if fact.critical_candidate else 'no'} |"
         )
     (ROOT / "catalog.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -552,13 +613,13 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
             second = selected_seconds[local_index]
             labels = [{
                 "title": fact.document.title,
-                "section_path": [fact.document.title, fact.section],
+                "section_path": list(section_path(fact)),
                 "relevance": 3,
             }]
             if second is not None:
                 labels.append({
                     "title": second.document.title,
-                    "section_path": [second.document.title, second.section],
+                    "section_path": list(section_path(second)),
                     "relevance": 2,
                 })
             payload: dict[str, object] = {
@@ -641,17 +702,28 @@ def write_generation_log() -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Build the DealFlow large_v1 source dataset")
+    parser.add_argument(
+        "--stage",
+        choices=("catalog", "documents", "queries", "metadata", "all"),
+        default="all",
+    )
+    args = parser.parse_args()
     KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
     facts = build_facts()
-    if len(facts) != 298:
-        raise ValueError(f"expected 298 facts, got {len(facts)}")
-    write_catalog(facts)
-    write_manifest()
-    for document in DOCS:
-        text = render_document(document, facts)
-        (KNOWLEDGE_DIR / document.filename).write_text(text, encoding="utf-8")
-    write_queries(facts)
-    write_generation_log()
+    if len(facts) != 240:
+        raise ValueError(f"expected 240 facts, got {len(facts)}")
+    if args.stage in {"catalog", "all"}:
+        write_catalog(facts)
+        write_manifest()
+    if args.stage in {"documents", "all"}:
+        for document in DOCS:
+            text = render_document(document, facts)
+            (KNOWLEDGE_DIR / document.filename).write_text(text, encoding="utf-8")
+    if args.stage in {"queries", "all"}:
+        write_queries(facts)
+    if args.stage in {"metadata", "all"}:
+        write_generation_log()
 
 
 if __name__ == "__main__":
