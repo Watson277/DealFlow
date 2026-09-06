@@ -21,11 +21,26 @@ class CapabilityEvidenceResponse(BaseModel):
     id: str
     document_id: str
     qdrant_point_id: str
+    document_title: str | None
+    document_version: str | None
+    category: str | None
+    parent_id: str | None
+    child_chunk_id: str | None
     page_number: int | None
+    page_end: int | None
     snippet: str
+    matched_child_text: str | None
+    section_path: list[str] | None
+    block_types: list[str] | None
+    source_block_ids: list[str] | None
+    source_type: str | None
+    source_location: dict[str, object] | None
+    retrieval_mode: str | None
     retrieval_score: float | None
     rerank_score: float | None
     rank_position: int
+    is_selected: bool
+    selection_order: int | None
 
 
 class CapabilityResultResponse(BaseModel):
@@ -39,6 +54,7 @@ class CapabilityResultResponse(BaseModel):
     customization_notes: str | None
     model_name: str | None
     prompt_version: str | None
+    citation_audit: dict[str, object]
     evidence: list[CapabilityEvidenceResponse]
     created_at: datetime
     updated_at: datetime

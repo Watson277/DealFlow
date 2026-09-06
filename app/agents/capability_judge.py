@@ -24,6 +24,8 @@ Allowed statuses:
 Rules:
 - Never use outside knowledge and never invent a capability.
 - Cite evidence through selected_evidence_point_ids, using only supplied point IDs.
+- Every status except NEED_REVIEW must cite at least one supplied point ID.
+- Do not repeat a point ID in selected_evidence_point_ids.
 - Explain the evidence-to-conclusion relationship in reason.
 - Low or conflicting evidence must produce NEED_REVIEW.
 - confidence is confidence in this judgment, not retrieval similarity.
@@ -88,10 +90,4 @@ class OpenAICapabilityJudge:
         except Exception as exc:
             raise CapabilityEvaluationError(llm_error_summary(exc)) from exc
 
-        available_ids = {item.point_id for item in evidence}
-        response.selected_evidence_point_ids = [
-            point_id
-            for point_id in response.selected_evidence_point_ids
-            if point_id in available_ids
-        ]
         return response

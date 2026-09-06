@@ -231,6 +231,7 @@ async def list_rfp_capabilities(
                 customization_notes=result.customization_notes,
                 model_name=result.model_name,
                 prompt_version=result.prompt_version,
+                citation_audit=result.citation_audit,
                 evidence=[
                     CapabilityEvidenceResponse.model_validate(item)
                     for item in sorted(

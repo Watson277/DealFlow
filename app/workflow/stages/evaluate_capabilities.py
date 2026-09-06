@@ -5,6 +5,10 @@ from decimal import Decimal
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.capability_citations import (
+    CapabilityCitationAudit,
+    validate_capability_citations,
+)
 from app.agents.capability_judge import (
     CapabilityJudge,
     CapabilityRequirement,
@@ -46,6 +50,7 @@ logger = structlog.get_logger(__name__)
 class EvaluatedCapability:
     requirement: CapabilityRequirement
     judgment: CapabilityJudgment
+    citation_audit: CapabilityCitationAudit
     evidence: list[RetrievedEvidence]
 
 
@@ -143,10 +148,12 @@ class CapabilityProcessingService:
                         if evidence
                         else self._no_evidence_judgment()
                     )
+                    citation_audit = validate_capability_citations(judgment, evidence)
                     evaluated.append(
                         EvaluatedCapability(
                             requirement=requirement,
                             judgment=judgment,
+                            citation_audit=citation_audit,
                             evidence=evidence,
                         )
                     )
@@ -220,6 +227,8 @@ class CapabilityProcessingService:
             for evaluated_item in evaluated:
                 result_id = generate_uuid()
                 judgment = evaluated_item.judgment
+                citation_audit = evaluated_item.citation_audit
+                selection_order = citation_audit.selection_order()
                 result_repository.add(
                     CapabilityResult(
                         id=result_id,
@@ -236,6 +245,7 @@ class CapabilityProcessingService:
                         model_name=self.settings.llm_model,
                         prompt_version=self.settings.capability_prompt_version,
                         raw_output=judgment.model_dump(mode="json"),
+                        citation_audit=citation_audit.as_payload(),
                     )
                 )
                 for rank, evidence in enumerate(evaluated_item.evidence, start=1):
@@ -245,8 +255,23 @@ class CapabilityProcessingService:
                             capability_result_id=result_id,
                             document_id=evidence.document_id,
                             qdrant_point_id=evidence.point_id,
+                            document_title=evidence.title,
+                            document_version=evidence.version,
+                            category=evidence.category,
+                            parent_id=evidence.parent_id,
+                            child_chunk_id=evidence.chunk_id,
                             page_number=evidence.page_number,
+                            page_end=evidence.page_end,
                             snippet=evidence.text,
+                            matched_child_text=(
+                                evidence.matched_child_text or evidence.text
+                            ),
+                            section_path=list(evidence.section_path),
+                            block_types=list(evidence.block_types),
+                            source_block_ids=list(evidence.source_block_ids),
+                            source_type=evidence.source_type,
+                            source_location=evidence.location,
+                            retrieval_mode=evidence.retrieval_mode,
                             retrieval_score=Decimal(str(round(evidence.score, 6))),
                             rerank_score=(
                                 Decimal(str(round(evidence.rerank_score, 6)))
@@ -254,6 +279,8 @@ class CapabilityProcessingService:
                                 else None
                             ),
                             rank_position=rank,
+                            is_selected=evidence.point_id in selection_order,
+                            selection_order=selection_order.get(evidence.point_id),
                         )
                     )
 
