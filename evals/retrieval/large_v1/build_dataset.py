@@ -306,18 +306,18 @@ def render_section(fact: Fact) -> str:
     notice_days = WINDOWS[(fact.document.number + fact.section_index + 5) % len(WINDOWS)]
     paragraphs = [
         fact.current_fact,
-        f"Applicability and contract treatment. The controlling dimensions are the contracted edition, deployment model, data region, effective version, and recorded capability state. For this policy area the catalog classification is {fact.status}, with the commercial scope recorded as {fact.plan}. A sales response may narrow that scope for a customer, but it may not silently broaden it. If an order form and this guide disagree, operations pauses activation and asks the {approver} to resolve the discrepancy in writing.",
-        f"Configuration workflow. {owner} opens the governing record before the setting is enabled, records the tenant and subscription, selects the authorized region, and links the approval. A second operator validates the resulting control in {region}; production use begins only after the {artifact} shows the expected value and a successful timestamp. The configuration is rechecked every {review_days} days and after any edition, identity-provider, network, or residency change that could alter eligibility.",
-        f"Exception handling. An exception must identify the precise unmet condition, the compensating control, an accountable owner, and an expiry no later than {exception_days} days after approval. Renewal is a new decision rather than an automatic extension. A roadmap statement cannot serve as a compensating control, and a professional-services estimate does not prove that a capability is active. When the exception expires, the system either restores the documented baseline or disables the dependent workflow.",
-        f"Operational verification. The service samples the active setting every {evidence_hours} hours while a change is open and compares it with the tenant registry. A mismatch creates a case for {owner}, preserves the previous and proposed values, and blocks a compliance export from showing the control as passed. The verification result is scoped to this capability; it does not certify adjacent identity, logging, resilience, or integration controls that happen to use a similar term.",
-        f"Evidence and auditability. The customer evidence package contains the {artifact}, effective version, UTC activation time, approving role, last verification result, and any open exception. Tenant secrets, personal data, and raw customer content are redacted, but the plan, region, status, threshold, and unit remain visible. A screenshot without tenant and version context is supporting material only. Reviewers can determine whether the rule was current, historical, planned, custom, or unavailable at the time.",
-        f"Failure and recovery. If verification fails, new dependent operations stop while already committed records remain readable. The owner triages whether the cause is configuration drift, an expired entitlement, a regional restriction, or a version mismatch. Customer-impacting failures are acknowledged through the contracted support channel, and restoration requires a clean verification run plus approval from the {approver}. Recovery of this control does not reset a separate SLA, RTO, RPO, log-retention, or data-residency clock.",
-        "Customer responsibilities. The customer supplies accurate tenant identifiers, maintains authorized contacts, and reports subscription or regional changes before the control is relied on in production. Where the customer operates an external identity provider, key service, network appliance, integration platform, or on-premises component, its availability remains a customer dependency. DealFlow remains responsible for enforcing the documented hosted boundary and for producing evidence about the portion it operates.",
+        f"Applicability and contract treatment for {fact.cue}. The controlling dimensions are the contracted edition, deployment model, data region, effective version, and recorded capability state. The catalog classification is {fact.status}, with the commercial scope recorded as {fact.plan}. A sales response may narrow that scope for a customer, but it may not silently broaden it. If an order form and this guide disagree, operations pauses activation and asks the {approver} to resolve the discrepancy in writing.",
+        f"Configuration workflow for {fact.cue}. {owner} opens the governing record before the setting is enabled, records the tenant and subscription, selects the authorized region, and links the approval. A second operator validates the resulting control in {region}; production use begins only after the {artifact} shows the expected value and a successful timestamp. The configuration is rechecked every {review_days} days and after any edition, identity-provider, network, or residency change that could alter eligibility.",
+        f"Exception handling for {fact.cue}. An exception must identify the precise unmet condition, the compensating control, an accountable owner, and an expiry no later than {exception_days} days after approval. Renewal is a new decision rather than an automatic extension. A roadmap statement cannot serve as a compensating control, and a professional-services estimate does not prove that a capability is active. When the exception expires, the system either restores the documented baseline or disables the dependent workflow.",
+        f"Operational verification for {fact.cue}. The service samples the active setting every {evidence_hours} hours while a change is open and compares it with the tenant registry. A mismatch creates a case for {owner}, preserves the previous and proposed values, and blocks a compliance export from showing the control as passed. The result does not certify adjacent identity, logging, resilience, or integration controls that happen to use a similar term.",
+        f"Evidence and auditability for {fact.cue}. The customer package contains the {artifact}, effective version, UTC activation time, approving role, last verification result, and any open exception. Tenant secrets, personal data, and raw customer content are redacted, but the plan, region, status, threshold, and unit remain visible. A screenshot without tenant and version context is supporting material only. Reviewers can determine whether the rule was current, historical, planned, custom, or unavailable at the time.",
+        f"Failure and recovery for {fact.cue}. If verification fails, new dependent operations stop while already committed records remain readable. The owner triages whether the cause is configuration drift, an expired entitlement, a regional restriction, or a version mismatch. Customer-impacting failures use the contracted support channel, and restoration requires a clean verification run plus approval from the {approver}. Recovery does not reset a separate SLA, RTO, RPO, log-retention, or data-residency clock.",
+        f"Customer responsibilities for {fact.cue}. The customer supplies accurate tenant identifiers, maintains authorized contacts, and reports subscription or regional changes before relying on the control in production. Where the customer operates an external identity provider, key service, network appliance, integration platform, or on-premises component, its availability remains a customer dependency. DealFlow enforces the documented hosted boundary and produces the {artifact} for the portion it operates.",
         f"A conforming procurement example is a tenant whose order form matches {fact.plan}, whose control is activated in {region}, and whose evidence package identifies the current version. The assessor accepts the result only for {fact.cue}; the same package cannot be reused to claim a different capability. If the customer later moves to {alternate_region}, the old verification remains historical evidence and a new regional check is required.",
         f"A non-conforming example is an implementation team citing a similarly named policy with a different number, lifecycle state, or subscription. {fact.distractor} The discrepancy is material even when both statements appear in official DealFlow documents, because the older or neighboring statement answers a different business condition. The response is corrected before proposal approval and the rejected interpretation remains in the audit trail.",
-        f"Change management. Material changes to eligibility, numeric limits, region coverage, or capability status are announced at least {notice_days} days before they take effect unless an urgent security correction requires a shorter window. The notice names the old value, new value, affected subscriptions, migration action, and authoritative replacement document. Existing exceptions retain their original expiry but are reassessed against the new baseline. Historical text stays available for audit purposes and is marked superseded.",
+        f"Change management for {fact.cue}. Material changes to eligibility, numeric limits, region coverage, or capability status are announced at least {notice_days} days before they take effect unless an urgent security correction requires a shorter window. The notice names the old value, new value, affected subscriptions, migration action, and authoritative replacement document. Existing exceptions retain their original expiry but are reassessed against the new baseline. Historical text stays available for audit purposes and is marked superseded.",
     ]
-    case_depth = {12_000: 1, 13_000: 2, 14_000: 2, 15_000: 3, 16_000: 4, 18_000: 5}[fact.document.target_tokens]
+    case_depth = {12_000: 1, 13_000: 1, 14_000: 2, 15_000: 3, 16_000: 4, 18_000: 5}[fact.document.target_tokens]
     for case_index in range(case_depth):
         case_region = REGIONS[(fact.document.number + fact.section_index + case_index) % len(REGIONS)]
         case_owner = OWNERS[(fact.document.number + fact.section_index + case_index + 2) % len(OWNERS)]
@@ -657,9 +657,11 @@ def make_queries(facts: list[Fact]) -> tuple[list[dict[str, object]], list[dict[
     return dev, test
 
 
-def write_queries(facts: list[Fact]) -> None:
+def write_queries(facts: list[Fact], split: str = "all") -> None:
     dev, test = make_queries(facts)
     for path, cases in ((ROOT / "queries-dev.jsonl", dev), (ROOT / "queries-test.jsonl", test)):
+        if split != "all" and split not in path.stem:
+            continue
         path.write_text(
             "".join(json.dumps(case, ensure_ascii=False, separators=(",", ":")) + "\n" for case in cases),
             encoding="utf-8",
@@ -705,7 +707,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build the DealFlow large_v1 source dataset")
     parser.add_argument(
         "--stage",
-        choices=("catalog", "documents", "queries", "metadata", "all"),
+        choices=("catalog", "documents", "queries-dev", "queries-test", "queries", "metadata", "all"),
         default="all",
     )
     args = parser.parse_args()
@@ -720,8 +722,9 @@ def main() -> None:
         for document in DOCS:
             text = render_document(document, facts)
             (KNOWLEDGE_DIR / document.filename).write_text(text, encoding="utf-8")
-    if args.stage in {"queries", "all"}:
-        write_queries(facts)
+    if args.stage in {"queries-dev", "queries-test", "queries", "all"}:
+        requested_split = args.stage.removeprefix("queries-")
+        write_queries(facts, requested_split if requested_split in {"dev", "test"} else "all")
     if args.stage in {"metadata", "all"}:
         write_generation_log()
 
