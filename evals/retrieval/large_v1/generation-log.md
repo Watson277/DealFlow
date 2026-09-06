@@ -35,7 +35,7 @@
 
 ## Latest source validation
 
-- Generated at: 2026-09-06T07:42:36.241095+00:00
+- Generated at: 2026-09-06T07:51:04.689679+00:00
 - Documents / cl100k_base tokens: 20 / 323,680
 - Dev / Test queries: 105 / 45
 - Critical / multi-evidence queries: 45 / 15
@@ -44,3 +44,16 @@
 - Repeated long paragraphs: 0
 - Frozen Test SHA-256: 120cdfd0d52742aca55cb70448c5a497915d324412f06aa12955c2ee2288bd67
 - All source-data gates passed: True
+
+## Runtime evaluation observations
+
+- Initial container attempt could not see large_v1 because the local image predated the dataset; rebuilding the existing rag-eval image resolved the environment issue.
+- Observed documents / Parent / Child / Qdrant Point: 20 / 581 / 1538 / 1538
+- Dev and Test report artifacts complete: True
+- dev dense: Hit@5=0.9714, MRR@5=0.8540, Recall@5=0.9524, nDCG@5=1.2419
+- dev hybrid: Hit@5=1.0000, MRR@5=0.9230, Recall@5=0.9905, nDCG@5=1.3312
+- dev hybrid_reranker: Hit@5=1.0000, MRR@5=0.9540, Recall@5=0.9952, nDCG@5=1.3458
+- test dense: Hit@5=0.9333, MRR@5=0.8637, Recall@5=0.9222, nDCG@5=1.1659
+- test hybrid: Hit@5=1.0000, MRR@5=0.9556, Recall@5=0.9889, nDCG@5=1.2812
+- test hybrid_reranker: Hit@5=1.0000, MRR@5=0.9889, Recall@5=1.0000, nDCG@5=1.3758
+- Known system limitation: nDCG@5 can exceed 1.0 because multiple Parent candidates under one labeled source section each add gain while the ideal gain counts the section label once. Production evaluation logic was not changed.

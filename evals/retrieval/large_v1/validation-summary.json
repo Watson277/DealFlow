@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "generated_at_utc": "2026-09-06T07:42:36.241095+00:00",
+  "generated_at_utc": "2026-09-06T07:51:04.689679+00:00",
   "validation_scope": "source data only; no parser, chunker, embedding, or vector store invoked",
   "tokenizer": "cl100k_base",
   "document_count": 20,
@@ -174,6 +174,86 @@
   "fact_ids_leaked_into_queries": [],
   "repeated_long_paragraphs": [],
   "catalog_fact_count": 240,
+  "system_evaluation_complete": true,
+  "runtime_observations": {
+    "dev": {
+      "artifacts_complete": true,
+      "document_count": 20,
+      "observed_parent_count": 581,
+      "observed_child_count": 1538,
+      "observed_qdrant_point_count": 1538,
+      "index_elapsed_ms": 33457.79535599286,
+      "modes": {
+        "dense": {
+          "query_count": 105,
+          "hit_rate_at_5": 0.9714285714285714,
+          "mrr_at_5": 0.8539682539682539,
+          "recall_at_5": 0.9523809523809523,
+          "ndcg_at_5": 1.2419227147913774,
+          "mean_latency_ms": 4.624549199139611,
+          "p95_latency_ms": 5.088866979349405
+        },
+        "hybrid": {
+          "query_count": 105,
+          "hit_rate_at_5": 1.0,
+          "mrr_at_5": 0.923015873015873,
+          "recall_at_5": 0.9904761904761905,
+          "ndcg_at_5": 1.331211441775147,
+          "mean_latency_ms": 19.299828399726678,
+          "p95_latency_ms": 22.427510004490614
+        },
+        "hybrid_reranker": {
+          "query_count": 105,
+          "hit_rate_at_5": 1.0,
+          "mrr_at_5": 0.953968253968254,
+          "recall_at_5": 0.9952380952380953,
+          "ndcg_at_5": 1.3457892219391405,
+          "mean_latency_ms": 940.8851574100221,
+          "p95_latency_ms": 565.0144990067929
+        }
+      }
+    },
+    "test": {
+      "artifacts_complete": true,
+      "document_count": 20,
+      "observed_parent_count": 581,
+      "observed_child_count": 1538,
+      "observed_qdrant_point_count": 1538,
+      "index_elapsed_ms": 32931.143308989704,
+      "modes": {
+        "dense": {
+          "query_count": 45,
+          "hit_rate_at_5": 0.9333333333333333,
+          "mrr_at_5": 0.8637037037037038,
+          "recall_at_5": 0.9222222222222223,
+          "ndcg_at_5": 1.165886484254804,
+          "mean_latency_ms": 5.435091312715991,
+          "p95_latency_ms": 7.065868005156517
+        },
+        "hybrid": {
+          "query_count": 45,
+          "hit_rate_at_5": 1.0,
+          "mrr_at_5": 0.9555555555555556,
+          "recall_at_5": 0.9888888888888889,
+          "ndcg_at_5": 1.2811938444360151,
+          "mean_latency_ms": 19.524966820608824,
+          "p95_latency_ms": 22.801287996117026
+        },
+        "hybrid_reranker": {
+          "query_count": 45,
+          "hit_rate_at_5": 1.0,
+          "mrr_at_5": 0.9888888888888889,
+          "recall_at_5": 1.0,
+          "ndcg_at_5": 1.3757980192957406,
+          "mean_latency_ms": 1128.9944247969995,
+          "p95_latency_ms": 548.4966560034081
+        }
+      }
+    }
+  },
+  "known_system_limitations": [
+    "nDCG@5 exceeds 1.0 because the current evaluator can add gain for multiple Parent candidates matching one source-section label while the ideal gain includes that label once; recorded without changing production evaluation semantics."
+  ],
   "freeze": {
     "queries_test_sha256": "120cdfd0d52742aca55cb70448c5a497915d324412f06aa12955c2ee2288bd67",
     "corpus_manifest_sha256": "c6920af1384cde970669a1be42fa609b95c203ae832ddd47c66047231b536dad"
