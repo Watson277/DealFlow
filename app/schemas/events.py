@@ -13,6 +13,13 @@ class RFPUploadedEvent(BaseModel):
     correlation_id: str
 
 
+class KnowledgeIngestionRequestedEvent(BaseModel):
+    event_id: str
+    event_type: Literal["knowledge.ingestion.requested"]
+    occurred_at: str
+    document_id: str
+
+
 class RFPCompletedEvent(BaseModel):
     event_id: str
     event_type: Literal["rfp.completed"]

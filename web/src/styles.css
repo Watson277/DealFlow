@@ -1034,6 +1034,9 @@ td small {
   color: #a0a8b5;
   font-size: 10px;
 }
+.document-card .document-error {
+  color: #b43e36;
+}
 .document-icon,
 .avatar {
   width: 42px;

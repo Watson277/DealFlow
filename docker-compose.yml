@@ -180,7 +180,9 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
         --create --if-not-exists --topic proposal.approved --partitions 3 --replication-factor 1 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
-        --create --if-not-exists --topic rfp.failed --partitions 3 --replication-factor 1
+        --create --if-not-exists --topic rfp.failed --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic knowledge.ingestion.requested --partitions 3 --replication-factor 1
     restart: "no"
     networks:
       - dealflow
@@ -289,6 +291,23 @@ services:
     command: ["python", "-m", "app.workers.rfp_worker"]
     depends_on: *app-dependencies
     restart: unless-stopped
+    volumes:
+      - ${LOCAL_ARTIFACT_EXPORT_HOST_DIR:-./data/processed-documents}:/app/data/processed-documents
+
+  knowledge-worker:
+    <<: *app-service
+    container_name: dealflow-knowledge-worker
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -z "$$LLM_API_KEY" ] && [ -z "$$ZAI_API_KEY" ] && [ -z "$$OPENAI_API_KEY" ]; then
+          echo 'LLM_API_KEY or ZAI_API_KEY is not configured; knowledge-worker is disabled.';
+          exit 0;
+        fi;
+        exec python -m app.workers.knowledge_worker
+    depends_on: *app-dependencies
+    restart: on-failure
     volumes:
       - ${LOCAL_ARTIFACT_EXPORT_HOST_DIR:-./data/processed-documents}:/app/data/processed-documents
 

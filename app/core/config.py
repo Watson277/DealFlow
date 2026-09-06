@@ -34,10 +34,12 @@ class Settings(BaseSettings):
     kafka_capabilities_evaluated_topic: str = "rfp.capabilities.evaluated"
     kafka_proposal_generated_topic: str = "proposal.generated"
     kafka_proposal_approved_topic: str = "proposal.approved"
+    kafka_knowledge_ingestion_topic: str = "knowledge.ingestion.requested"
     kafka_rfp_worker_group: str = "dealflow-rfp-workers"
     kafka_requirement_worker_group: str = "dealflow-requirement-workers"
     kafka_capability_worker_group: str = "dealflow-capability-workers"
     kafka_proposal_worker_group: str = "dealflow-proposal-workers"
+    kafka_knowledge_worker_group: str = "dealflow-knowledge-workers"
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "dealflow_knowledge_v2"
     qdrant_search_top_k: int = 5

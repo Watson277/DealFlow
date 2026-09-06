@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -21,10 +22,11 @@ from app.documents.pdf import (
     document_ir_object_key,
     serialize_document_ir,
 )
+from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.infrastructure.storage.local_artifacts import LocalArtifactExporter
 from app.infrastructure.storage.minio import ObjectStorageService
-from app.models import Document
-from app.models.enums import DocumentStatus, DocumentType
+from app.models import Document, OutboxEvent
+from app.models.enums import DocumentStatus, DocumentType, OutboxStatus
 from app.models.mixins import generate_uuid, utc_now
 from app.rag.chunking import KnowledgeChunker
 from app.rag.embedding import EmbeddingService
@@ -46,7 +48,11 @@ from app.rag.incremental import (
     document_content_hash,
 )
 from app.rag.vector_store import QdrantKnowledgeStore
-from app.repositories import DocumentRepository, KnowledgeChunkRepository
+from app.repositories import (
+    DocumentRepository,
+    KnowledgeChunkRepository,
+    OutboxEventRepository,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -70,6 +76,7 @@ class KnowledgeService:
         embeddings: EmbeddingService,
         vector_store: QdrantKnowledgeStore,
         local_exporter: LocalArtifactExporter | None = None,
+        outbox_publisher: OutboxPublisher | None = None,
     ) -> None:
         self.session = session
         self.storage = storage
@@ -78,6 +85,89 @@ class KnowledgeService:
         self.embeddings = embeddings
         self.vector_store = vector_store
         self.local_exporter = local_exporter
+        self.outbox_publisher = outbox_publisher
+
+    async def enqueue_ingestion(
+        self,
+        upload: UploadFile,
+        *,
+        title: str,
+        category: str,
+        version: str | None,
+    ) -> Document:
+        if self.outbox_publisher is None:
+            raise RuntimeError("knowledge ingestion requires an Outbox publisher")
+
+        document_id = generate_uuid()
+        event_id = generate_uuid()
+        normalized_title = title.strip()
+        normalized_category = category.strip().lower()
+        stored = await self.storage.upload_knowledge(
+            upload,
+            document_id=document_id,
+            category=normalized_category,
+        )
+        document = Document(
+            id=document_id,
+            rfp_id=None,
+            document_type=DocumentType.KNOWLEDGE.value,
+            status=DocumentStatus.UPLOADED.value,
+            bucket=stored.bucket,
+            object_key=stored.object_key,
+            original_filename=stored.original_filename,
+            content_type=stored.content_type,
+            size_bytes=stored.size_bytes,
+            checksum_sha256=stored.checksum_sha256,
+            document_version=version,
+            knowledge_category=normalized_category,
+            extra_data={
+                "title": normalized_title,
+                "knowledge_status": "ACTIVE",
+                "ingestion_stage": "QUEUED",
+                "ingestion_error": None,
+            },
+        )
+        event = OutboxEvent(
+            id=event_id,
+            aggregate_type="KnowledgeDocument",
+            aggregate_id=document_id,
+            topic=self.vector_store.settings.kafka_knowledge_ingestion_topic,
+            event_key=document_id,
+            payload={
+                "event_id": event_id,
+                "event_type": "knowledge.ingestion.requested",
+                "occurred_at": datetime.now(UTC).isoformat(),
+                "document_id": document_id,
+            },
+            status=OutboxStatus.PENDING.value,
+        )
+
+        try:
+            async with self.session.begin():
+                repository = DocumentRepository(self.session)
+                duplicate = await repository.find_active_knowledge_by_checksum(
+                    stored.checksum_sha256
+                )
+                if duplicate is not None:
+                    raise DuplicateKnowledgeError(
+                        duplicate.id,
+                        str(duplicate.extra_data.get("title") or duplicate.original_filename),
+                    )
+                repository.add(document)
+                OutboxEventRepository(self.session).add(event)
+                await self.session.flush()
+        except Exception:
+            await self.storage.remove(stored.bucket, stored.object_key)
+            raise
+
+        event_status = await self.outbox_publisher.publish_event(self.session, event)
+        logger.info(
+            "knowledge_ingestion_queued",
+            document_id=document_id,
+            event_id=event_id,
+            event_status=event_status,
+        )
+        return document
 
     async def ingest(
         self,
@@ -108,9 +198,6 @@ class KnowledgeService:
             knowledge_category=category.strip().lower(),
             extra_data={"title": title.strip(), "knowledge_status": "ACTIVE"},
         )
-        parsed_object_key: str | None = None
-        parsed_ir_object_key: str | None = None
-        chunks_object_key: str | None = None
         try:
             async with self.session.begin():
                 DocumentRepository(self.session).add(document)
@@ -120,132 +207,196 @@ class KnowledgeService:
             raise
 
         try:
-            content = await self.storage.download(stored.bucket, stored.object_key)
-            parsed = await asyncio.to_thread(
-                self.parser.parse,
-                content,
-                stored.original_filename,
+            document = await self._process_existing_document(document_id)
+        except DuplicateKnowledgeError:
+            await self._discard_new_document(document_id, stored.bucket, stored.object_key)
+            raise
+        except Exception as exc:
+            failure_recorded = await self._mark_failed(
                 document_id,
+                None,
+                None,
+                None,
+                error=exc,
             )
-            normalized_content_hash = document_content_hash(parsed.text)
-            async with self.session.begin():
-                duplicate = await DocumentRepository(
-                    self.session
-                ).find_active_knowledge_by_content_hash(
-                    normalized_content_hash,
-                    exclude_document_id=document_id,
-                )
+            if not failure_recorded:
+                raise
+            with suppress(Exception):
+                await self.vector_store.delete_document(document_id)
+            raise
+        return document
+
+    async def process_queued_ingestion(self, document_id: str) -> None:
+        try:
+            document = await self._process_existing_document(document_id)
+            if document is None:
+                return
+        except Exception as exc:
+            failure_recorded = await self._mark_failed(
+                document_id,
+                None,
+                None,
+                None,
+                error=exc,
+            )
+            if not failure_recorded:
+                raise
+            with suppress(Exception):
+                await self.vector_store.delete_document(document_id)
+            logger.warning(
+                "knowledge_ingestion_failed",
+                document_id=document_id,
+                error_type=type(exc).__name__,
+            )
+            return
+        logger.info("knowledge_ingestion_completed", document_id=document_id)
+
+    async def _process_existing_document(self, document_id: str) -> Document | None:
+        async with self.session.begin():
+            document = await DocumentRepository(self.session).get_knowledge_for_update(document_id)
+            if document is None:
+                logger.info("knowledge_ingestion_ignored_missing_document", document_id=document_id)
+                return None
+            if document.status == DocumentStatus.READY.value:
+                logger.info("knowledge_ingestion_already_completed", document_id=document_id)
+                return document
+            document.status = DocumentStatus.PARSING.value
+            document.extra_data = {
+                **document.extra_data,
+                "ingestion_stage": "PARSING",
+                "ingestion_error": None,
+            }
+
+        title = str(document.extra_data.get("title") or document.original_filename)
+        category = document.knowledge_category or "general"
+        version = document.document_version
+        content = await self.storage.download(document.bucket, document.object_key)
+        parsed = await asyncio.to_thread(
+            self.parser.parse,
+            content,
+            document.original_filename,
+            document_id,
+        )
+        normalized_content_hash = document_content_hash(parsed.text)
+        async with self.session.begin():
+            repository = DocumentRepository(self.session)
+            persisted = await repository.get_knowledge_for_update(document_id)
+            if persisted is None:
+                logger.info("knowledge_ingestion_cancelled", document_id=document_id)
+                return None
+            duplicate = await repository.find_active_knowledge_by_content_hash(
+                normalized_content_hash,
+                exclude_document_id=document_id,
+            )
             if duplicate is not None:
                 raise DuplicateKnowledgeError(
                     duplicate.id,
                     str(duplicate.extra_data.get("title") or duplicate.original_filename),
                 )
-            parsed_object_key = f"knowledge/{document_id}/parsed.txt"
-            await self.storage.upload_text(parsed_object_key, parsed.text)
-            if parsed.document_ir is not None:
-                parsed_ir_object_key = document_ir_object_key(document_id)
-                await self.storage.upload_text(
-                    parsed_ir_object_key,
-                    serialize_document_ir(parsed.document_ir),
-                    content_type=DOCUMENT_IR_CONTENT_TYPE,
-                )
-            bundle = self._build_bundle(
-                parsed,
-                filename=stored.original_filename,
-                document_id=document_id,
-                title=title,
-                version=version,
-            )
-            child_candidates = candidates_for(
-                bundle.children,
-                model=self.vector_store.settings.embedding_model,
-                dimensions=self.vector_store.settings.embedding_dimensions,
-            )
-            decisions = tuple(
-                ChildDecision(candidate=candidate, kind="ADDED")
-                for candidate in child_candidates
-            )
-            chunks_object_key = knowledge_chunk_object_key(document_id)
-            serialized_chunks = serialize_knowledge_chunks(bundle)
+            persisted.status = DocumentStatus.INDEXING.value
+            persisted.extra_data = {
+                **persisted.extra_data,
+                "ingestion_stage": "INDEXING",
+            }
+
+        parsed_object_key = f"knowledge/{document_id}/parsed.txt"
+        await self.storage.upload_text(parsed_object_key, parsed.text)
+        parsed_ir_object_key: str | None = None
+        if parsed.document_ir is not None:
+            parsed_ir_object_key = document_ir_object_key(document_id)
             await self.storage.upload_text(
-                chunks_object_key,
-                serialized_chunks,
-                content_type=KNOWLEDGE_CHUNK_CONTENT_TYPE,
-            )
-            vectors = await self.embeddings.embed(
-                [chunk.embedding_text for chunk in bundle.children]
-            )
-            point_ids = await self.vector_store.index_document(
-                document_id=document_id,
-                title=title.strip(),
-                version=version,
-                category=category.strip().lower(),
-                chunks=bundle.children,
-                vectors=vectors,
-            )
-            async with self.session.begin():
-                persisted = await DocumentRepository(self.session).get(document_id)
-                if persisted is None:
-                    raise KnowledgeIndexError("knowledge document disappeared during indexing")
-                await KnowledgeChunkRepository(self.session).replace_parents(
-                    document_id,
-                    bundle.parents,
-                )
-                await KnowledgeChunkRepository(self.session).replace_child_indexes(
-                    document_id,
-                    decisions,
-                    dict(zip((item.chunk_id for item in bundle.children), point_ids, strict=True)),
-                )
-                persisted.status = DocumentStatus.READY.value
-                persisted.content_hash = normalized_content_hash
-                persisted.page_count = parsed.page_count
-                persisted.parsed_text_object_key = parsed_object_key
-                persisted.parsed_ir_object_key = parsed_ir_object_key
-                persisted.extra_data = {
-                    **persisted.extra_data,
-                    "qdrant_collection": self.vector_store.settings.qdrant_collection,
-                    "qdrant_point_count": len(point_ids),
-                    "chunks_object_key": chunks_object_key,
-                    "parent_chunk_count": len(bundle.parents),
-                    "child_chunk_count": len(bundle.children),
-                    "chunk_schema_version": bundle.schema_version,
-                    "incremental_stats": {
-                        "unchanged": 0,
-                        "moved": 0,
-                        "modified": 0,
-                        "added": len(bundle.children),
-                        "deleted": 0,
-                        "embedded": len(bundle.children),
-                    },
-                }
-                document = persisted
-            await self._export_locally(
-                document_id=document_id,
-                original_filename=stored.original_filename,
-                parsed_text=parsed.text,
-                document_ir=(
-                    serialize_document_ir(parsed.document_ir)
-                    if parsed.document_ir is not None
-                    else None
-                ),
-                serialized_chunks=serialized_chunks,
-                parsed_object_key=parsed_object_key,
-                parsed_ir_object_key=parsed_ir_object_key,
-                chunks_object_key=chunks_object_key,
-            )
-        except DuplicateKnowledgeError:
-            await self._discard_new_document(document_id, stored.bucket, stored.object_key)
-            raise
-        except Exception:
-            await self._mark_failed(
-                document_id,
-                parsed_object_key,
                 parsed_ir_object_key,
-                chunks_object_key,
+                serialize_document_ir(parsed.document_ir),
+                content_type=DOCUMENT_IR_CONTENT_TYPE,
             )
-            with suppress(Exception):
+        bundle = self._build_bundle(
+            parsed,
+            filename=document.original_filename,
+            document_id=document_id,
+            title=title,
+            version=version,
+        )
+        child_candidates = candidates_for(
+            bundle.children,
+            model=self.vector_store.settings.embedding_model,
+            dimensions=self.vector_store.settings.embedding_dimensions,
+        )
+        decisions = tuple(
+            ChildDecision(candidate=candidate, kind="ADDED")
+            for candidate in child_candidates
+        )
+        chunks_object_key = knowledge_chunk_object_key(document_id)
+        serialized_chunks = serialize_knowledge_chunks(bundle)
+        await self.storage.upload_text(
+            chunks_object_key,
+            serialized_chunks,
+            content_type=KNOWLEDGE_CHUNK_CONTENT_TYPE,
+        )
+        vectors = await self.embeddings.embed(
+            [chunk.embedding_text for chunk in bundle.children]
+        )
+        point_ids = await self.vector_store.index_document(
+            document_id=document_id,
+            title=title,
+            version=version,
+            category=category,
+            chunks=bundle.children,
+            vectors=vectors,
+        )
+        async with self.session.begin():
+            persisted = await DocumentRepository(self.session).get_knowledge_for_update(document_id)
+            if persisted is None:
                 await self.vector_store.delete_document(document_id)
-            raise
+                logger.info("knowledge_ingestion_cancelled", document_id=document_id)
+                return None
+            await KnowledgeChunkRepository(self.session).replace_parents(
+                document_id,
+                bundle.parents,
+            )
+            await KnowledgeChunkRepository(self.session).replace_child_indexes(
+                document_id,
+                decisions,
+                dict(zip((item.chunk_id for item in bundle.children), point_ids, strict=True)),
+            )
+            persisted.status = DocumentStatus.READY.value
+            persisted.content_hash = normalized_content_hash
+            persisted.page_count = parsed.page_count
+            persisted.parsed_text_object_key = parsed_object_key
+            persisted.parsed_ir_object_key = parsed_ir_object_key
+            persisted.extra_data = {
+                **persisted.extra_data,
+                "ingestion_stage": "READY",
+                "ingestion_error": None,
+                "qdrant_collection": self.vector_store.settings.qdrant_collection,
+                "qdrant_point_count": len(point_ids),
+                "chunks_object_key": chunks_object_key,
+                "parent_chunk_count": len(bundle.parents),
+                "child_chunk_count": len(bundle.children),
+                "chunk_schema_version": bundle.schema_version,
+                "incremental_stats": {
+                    "unchanged": 0,
+                    "moved": 0,
+                    "modified": 0,
+                    "added": len(bundle.children),
+                    "deleted": 0,
+                    "embedded": len(bundle.children),
+                },
+            }
+            document = persisted
+        await self._export_locally(
+            document_id=document_id,
+            original_filename=document.original_filename,
+            parsed_text=parsed.text,
+            document_ir=(
+                serialize_document_ir(parsed.document_ir)
+                if parsed.document_ir is not None
+                else None
+            ),
+            serialized_chunks=serialized_chunks,
+            parsed_object_key=parsed_object_key,
+            parsed_ir_object_key=parsed_ir_object_key,
+            chunks_object_key=chunks_object_key,
+        )
         return document
 
     async def update(
@@ -635,6 +786,13 @@ class KnowledgeService:
             total = await repository.count_knowledge()
         return KnowledgePage(items=items, total=total, offset=offset, limit=limit)
 
+    async def get(self, document_id: str) -> Document:
+        async with self.session.begin():
+            document = await DocumentRepository(self.session).get_knowledge(document_id)
+        if document is None:
+            raise KnowledgeNotFoundError("知识库文档不存在或已删除")
+        return document
+
     async def close(self) -> None:
         await self.vector_store.close()
 
@@ -680,18 +838,43 @@ class KnowledgeService:
         parsed_object_key: str | None,
         parsed_ir_object_key: str | None,
         chunks_object_key: str | None,
-    ) -> None:
+        *,
+        error: Exception | None = None,
+    ) -> bool:
         try:
             async with self.session.begin():
-                document = await DocumentRepository(self.session).get(document_id)
+                document = await DocumentRepository(self.session).get_knowledge_for_update(
+                    document_id
+                )
                 if document is not None:
                     document.status = DocumentStatus.FAILED.value
                     document.parsed_text_object_key = parsed_object_key
                     document.parsed_ir_object_key = parsed_ir_object_key
-                    if chunks_object_key is not None:
-                        document.extra_data = {
-                            **document.extra_data,
-                            "chunks_object_key": chunks_object_key,
+                    ingestion_error: dict[str, object] | None = None
+                    if error is not None:
+                        ingestion_error = {
+                            "code": type(error).__name__,
+                            "message": str(error)[:1500],
                         }
+                        if isinstance(error, DuplicateKnowledgeError):
+                            ingestion_error.update(
+                                existing_document_id=error.document_id,
+                                existing_title=error.title,
+                            )
+                    document.extra_data = {
+                        **document.extra_data,
+                        "ingestion_stage": "FAILED",
+                        "ingestion_error": ingestion_error,
+                        **(
+                            {"chunks_object_key": chunks_object_key}
+                            if chunks_object_key is not None
+                            else {}
+                        ),
+                    }
+                    return True
         except Exception:
-            pass
+            logger.exception(
+                "knowledge_ingestion_failure_state_update_failed",
+                document_id=document_id,
+            )
+        return False

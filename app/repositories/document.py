@@ -42,6 +42,14 @@ class DocumentRepository(BaseRepository[Document]):
         )
         return int((await self.session.scalar(statement)) or 0)
 
+    async def get_knowledge(self, document_id: str) -> Document | None:
+        statement = select(Document).where(
+            Document.id == document_id,
+            Document.document_type == DocumentType.KNOWLEDGE.value,
+            Document.status != DocumentStatus.ARCHIVED.value,
+        )
+        return (await self.session.execute(statement)).scalar_one_or_none()
+
     async def get_knowledge_for_update(self, document_id: str) -> Document | None:
         statement = (
             select(Document)
@@ -76,4 +84,15 @@ class DocumentRepository(BaseRepository[Document]):
         )
         if exclude_document_id is not None:
             statement = statement.where(Document.id != exclude_document_id)
+        return (await self.session.scalars(statement.limit(1))).first()
+
+    async def find_active_knowledge_by_checksum(
+        self,
+        checksum_sha256: str,
+    ) -> Document | None:
+        statement = select(Document).where(
+            Document.document_type == DocumentType.KNOWLEDGE.value,
+            Document.status != DocumentStatus.ARCHIVED.value,
+            Document.checksum_sha256 == checksum_sha256,
+        )
         return (await self.session.scalars(statement.limit(1))).first()

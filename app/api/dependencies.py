@@ -76,6 +76,7 @@ def get_proposal_review_service(
 def get_knowledge_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorageService, Depends(get_object_storage_service)],
+    kafka: Annotated[KafkaProducerService, Depends(get_kafka_service)],
 ) -> KnowledgeService:
     settings = get_settings()
     return KnowledgeService(
@@ -86,4 +87,5 @@ def get_knowledge_service(
         embeddings=OpenAIEmbeddingService(settings),
         vector_store=QdrantKnowledgeStore(settings),
         local_exporter=LocalArtifactExporter(settings),
+        outbox_publisher=OutboxPublisher(kafka),
     )

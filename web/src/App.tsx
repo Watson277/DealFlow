@@ -52,7 +52,9 @@ const statusText: Record<string, string> = {
   APPROVED: "已通过",
   FAILED: "失败",
   READY: "可用",
-  UPLOADED: "已上传",
+  UPLOADED: "等待处理",
+  PARSING: "解析中",
+  INDEXING: "索引中",
   CHANGES_REQUESTED: "等待修改",
   SUPPORTED: "支持",
   PARTIALLY_SUPPORTED: "部分支持",
@@ -956,6 +958,11 @@ function DocumentCard({ item, busy, onUpdate, onDelete }: {
   onUpdate: () => void;
   onDelete: () => void;
 }) {
+  const ingestionError = item.extra_data.ingestion_error;
+  const ingestionErrorMessage =
+    ingestionError && typeof ingestionError === "object" && "message" in ingestionError
+      ? String(ingestionError.message)
+      : null;
   return (
     <article className="document-card">
       <div className="document-icon">
@@ -972,12 +979,17 @@ function DocumentCard({ item, busy, onUpdate, onDelete }: {
         <small>
           {Math.ceil(item.size_bytes / 1024)} KB · {formatDate(item.created_at)}
         </small>
+        {ingestionErrorMessage && (
+          <small className="document-error" title={ingestionErrorMessage}>
+            {ingestionErrorMessage}
+          </small>
+        )}
       </div>
       <div className="card-actions">
         <StatusBadge value={item.status} />
         <button
           className="secondary"
-          disabled={busy || ["INDEXING", "PARSING"].includes(item.status)}
+          disabled={busy || ["UPLOADED", "INDEXING", "PARSING"].includes(item.status)}
           aria-label={`更新知识库文档 ${String(item.extra_data.title ?? item.original_filename)}`}
           onClick={onUpdate}
         >
@@ -1049,7 +1061,7 @@ function SidePanel({
           "知识文档已完成增量更新",
         );
       } else {
-        void onSubmit(() => api.createKnowledge(data), "知识文档已完成入库");
+        void onSubmit(() => api.createKnowledge(data), "知识文档已进入处理队列");
       }
     }
     if (panel === "customer") {

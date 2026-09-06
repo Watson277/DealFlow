@@ -63,7 +63,7 @@ async def delete_knowledge_document(
     return Response(status_code=204)
 
 
-@router.post("", response_model=KnowledgeDocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=KnowledgeDocumentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_knowledge_document(
     file: Annotated[
         UploadFile,
@@ -75,7 +75,7 @@ async def create_knowledge_document(
     version: Annotated[str | None, Form(max_length=32)] = None,
 ) -> KnowledgeDocumentResponse:
     try:
-        document = await service.ingest(
+        document = await service.enqueue_ingestion(
             file,
             title=title,
             category=category,
@@ -176,3 +176,17 @@ async def list_knowledge_documents(
         items=[KnowledgeDocumentResponse.model_validate(item) for item in page.items],
         total=page.total,
     )
+
+
+@router.get("/{document_id}", response_model=KnowledgeDocumentResponse)
+async def get_knowledge_document(
+    document_id: UUID,
+    service: Annotated[KnowledgeService, Depends(get_knowledge_service)],
+) -> KnowledgeDocumentResponse:
+    try:
+        document = await service.get(str(document_id))
+    except KnowledgeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        await service.close()
+    return KnowledgeDocumentResponse.model_validate(document)
