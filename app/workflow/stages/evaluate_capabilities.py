@@ -132,6 +132,9 @@ class CapabilityProcessingService:
                         query_text=query_text,
                         mode="hybrid",
                     )
+                    evidence = evidence[
+                        : self.settings.qdrant_hybrid_fusion_top_k
+                    ]
                     evidence = await self.reranker.rerank(
                         query_text,
                         evidence,

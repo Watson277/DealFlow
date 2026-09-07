@@ -206,6 +206,7 @@ async def _evaluate_mode(
             limit=retrieve_limit,
         )
         if mode == "hybrid_reranker":
+            candidates = candidates[:candidate_k]
             reranked_children = await reranker.rerank(
                 query_text,
                 candidates,

@@ -57,15 +57,16 @@ class CrossEncoderEvidenceReranker:
     ) -> list[RetrievedEvidence]:
         if not evidence or limit < 1:
             return []
+        candidates = evidence[:limit]
         if not self.settings.capability_reranker_enabled:
-            return evidence[:limit]
+            return candidates
 
         started_at = perf_counter()
         try:
             reranked, batch_size = await asyncio.to_thread(
                 self._rerank_sync,
                 query,
-                evidence,
+                candidates,
                 limit,
             )
         except Exception as exc:
@@ -77,14 +78,16 @@ class CrossEncoderEvidenceReranker:
                 "capability_reranker_fell_back_to_rrf",
                 error_type=type(exc).__name__,
                 error=str(exc)[:500],
-                candidate_count=len(evidence),
+                received_candidate_count=len(evidence),
+                candidate_count=len(candidates),
             )
-            return evidence[:limit]
+            return candidates
 
         logger.info(
             "capability_evidence_reranked",
             model=self.settings.capability_reranker_model,
-            candidate_count=len(evidence),
+            received_candidate_count=len(evidence),
+            candidate_count=len(candidates),
             result_count=len(reranked),
             batch_size=batch_size,
             elapsed_ms=round((perf_counter() - started_at) * 1000, 2),
