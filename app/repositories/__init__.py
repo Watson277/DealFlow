@@ -1,6 +1,7 @@
 """Persistence repositories."""
 
 from app.repositories.capability import CapabilityEvidenceRepository, CapabilityResultRepository
+from app.repositories.consumed_event import ConsumedEventRepository
 from app.repositories.customer import CustomerRepository
 from app.repositories.document import DocumentRepository
 from app.repositories.knowledge_chunk import KnowledgeChunkRepository
@@ -14,6 +15,7 @@ __all__ = [
     "CustomerRepository",
     "CapabilityEvidenceRepository",
     "CapabilityResultRepository",
+    "ConsumedEventRepository",
     "DocumentRepository",
     "KnowledgeChunkRepository",
     "OutboxEventRepository",

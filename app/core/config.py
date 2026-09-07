@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     kafka_capability_worker_group: str = "dealflow-capability-workers"
     kafka_proposal_worker_group: str = "dealflow-proposal-workers"
     kafka_knowledge_worker_group: str = "dealflow-knowledge-workers"
+    outbox_relay_poll_interval_seconds: float = Field(default=1.0, gt=0.0, le=60.0)
+    outbox_relay_batch_size: int = Field(default=50, ge=1, le=1_000)
+    outbox_relay_initial_backoff_seconds: float = Field(default=1.0, gt=0.0, le=3_600.0)
+    outbox_relay_max_backoff_seconds: float = Field(default=300.0, gt=0.0, le=86_400.0)
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "dealflow_knowledge_v2"
     qdrant_search_top_k: int = 5
@@ -112,6 +116,8 @@ class Settings(BaseSettings):
     pdf_page_parallel_min_pages: int = Field(default=4, ge=2, le=10_000)
     rfp_lock_ttl_seconds: int = 300
     rfp_lock_acquire_timeout_seconds: float = 10.0
+    redis_lock_watchdog_enabled: bool = True
+    redis_lock_watchdog_interval_seconds: float = Field(default=30.0, gt=0.0, le=300.0)
 
     llm_api_key: SecretStr | None = Field(
         default=None,

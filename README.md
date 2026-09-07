@@ -34,7 +34,8 @@ DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP �
    ```
 
 Compose 会依次启动 MySQL、Redis、Kafka、Qdrant 和 MinIO，创建 Kafka topics 与 MinIO
-bucket，执行 Alembic 数据库迁移，最后启动 FastAPI、四个 Worker 和 React Web 容器。
+bucket，执行 Alembic 数据库迁移，最后启动 FastAPI、各业务 Worker、Outbox Relay 和 React Web
+容器。
 
 ## 访问地址
 
@@ -104,6 +105,20 @@ curl.exe -X POST "http://localhost:8000/dev/pdf/parse" `
 接口仅在 `APP_ENV=development/dev/local/test/testing` 时开放，其他环境返回 `404`。上传大小受
 `MAX_RFP_UPLOAD_SIZE_BYTES` 限制。VLM 是否调用仍由 `PDF_VLM_ENABLED` 控制。
 
+### 企业知识库结构化分块
+
+PDF 知识文档优先使用 `DocumentIR` 分块：Chunker 按 Block 阅读顺序跟踪标题层级，在同一页、
+同一章节内合并相邻文本和列表，并从索引中排除页眉、页脚。表格和公式作为独立语义单元；超长
+Markdown 表格按数据行拆分，每个分块都会重复表头，Caption 会和紧随的表格或图片一起保留。
+超长普通 Block 才回退到 `KNOWLEDGE_CHUNK_SIZE_CHARS` 与
+`KNOWLEDGE_CHUNK_OVERLAP_CHARS` 控制的字符切分。DOCX 和旧纯文本继续使用原有按页标记、
+空行边界的兼容策略。
+
+用于 Embedding 和证据展示的 Chunk 会带上文档标题、版本及章节路径；Qdrant Payload 额外保存
+`page_end`、`section_path`、`block_types`、`source_block_ids` 和 `parent_id`，Capability Agent
+也会收到这些结构化检索信息。已存在的 Qdrant Point 不会自动重建；需要删除并重新上传旧知识
+文档，才能使用新的结构化分块和 Payload。
+
 ## 删除客户、知识库与任务
 
 客户卡片、知识库卡片、RFP 列表及任务详情提供删除按钮，必须二次确认。
@@ -141,6 +156,43 @@ curl.exe -X POST "http://localhost:8000/dev/pdf/parse" `
 `GET /rfps/{rfp_id}/status` 增加 `stage_label`、`stage_started_at`、`elapsed_seconds`、
 `progress_percent`、`attempt`、`is_terminal`。进度按阶段估算，不是 LLM token 进度或剩余时间预测；
 人工审核等待时为 95%，通过后为 100%。迁移前的历史阶段时间仅作近似参考。
+
+### Redis 锁看门狗
+
+每个 RFP 工作流阶段使用独立的 Redis 锁。持锁期间，看门狗默认每 30 秒续租一次；对于较短
+TTL，续租间隔自动收紧到 TTL 的三分之一。续租通过 Lua 原子校验随机 owner token 后再执行
+`EXPIRE`，不会延长已经被其他 Worker 接管的锁。Redis 短暂不可用时，看门狗会在原租约到期前
+快速重试；一旦确认 token 不匹配，或直到租约到期仍无法续租，就取消当前业务协程并让 Kafka
+保留该消息等待重试。释放锁同样校验 owner token。
+
+`REDIS_LOCK_WATCHDOG_ENABLED` 可以关闭续租，`REDIS_LOCK_WATCHDOG_INTERVAL_SECONDS` 控制正常
+续租间隔。该机制避免长时间 OCR/LLM 调用超过固定 TTL，但不替代数据库幂等检查和事务锁。
+
+### Outbox Relay
+
+业务状态与待发送事件会在同一个 MySQL 事务中写入 `outbox_events`。请求或 Worker 提交事务后仍会
+尝试即时发送，以降低正常链路延迟；独立 `outbox-relay` 容器持续扫描已到 `available_at` 的
+`PENDING` 事件，负责 Kafka 暂时不可用或进程异常时的补偿投递。
+
+Relay 每批使用 `SELECT ... FOR UPDATE SKIP LOCKED` 锁定记录，因此可以安全启动多个实例而不会
+同时处理同一行。失败事件按 1、2、4 秒递增做指数退避，达到上限后固定间隔重试，不会因为达到
+次数上限而丢弃。相关参数为 `OUTBOX_RELAY_POLL_INTERVAL_SECONDS`、
+`OUTBOX_RELAY_BATCH_SIZE`、`OUTBOX_RELAY_INITIAL_BACKOFF_SECONDS` 和
+`OUTBOX_RELAY_MAX_BACKOFF_SECONDS`。
+
+该实现是至少一次投递：如果 Kafka 已确认消息、但更新 `PUBLISHED` 的数据库事务提交失败，Relay
+会再次发送同一 `event_id`。消费者必须继续以业务状态和 `event_id` 做幂等保护，不能假设消息只
+出现一次。
+
+Kafka 消费者使用 `consumed_events` 表按 `(consumer_group, event_id)` 去重。每条有效消息先查询
+是否已经消费；业务处理成功后写入消费记录，再提交 Kafka offset。若进程在写入消费记录之后、
+提交 offset 之前退出，消息重放时会直接跳过业务处理并提交 offset。消费记录还保存 topic、
+partition、offset、event type 和消费时间，便于审计。现有 RFP 阶段状态、数据库唯一约束和 Redis
+锁仍然保留为第二道幂等保护。
+
+消费记录不能阻止“外部 LLM 已返回、但业务结果尚未提交”这个窗口内的重复调用；进程此时崩溃，
+恢复后仍需重新执行该阶段。若长期运行，应按业务保留周期归档或清理 `consumed_events`，清理周期
+必须长于 Kafka 消息保留和可能的人工重放窗口。
 
 ## LLM 日志
 
@@ -186,7 +238,7 @@ RFP 状态接口仍只显示简短错误摘要；详细字段错误请查看对�
 docker compose ps
 
 # 查看应用日志
-docker compose logs -f api rfp-worker requirement-worker capability-worker proposal-worker
+docker compose logs -f api outbox-relay rfp-worker requirement-worker capability-worker proposal-worker
 
 # 重新构建应用镜像
 docker compose build api

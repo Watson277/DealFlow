@@ -137,6 +137,7 @@ async def test_capability_worker_retrieves_qdrant_evidence_and_persists_results(
     knowledge_document: Document | None = None
     knowledge_source_key: str | None = None
     knowledge_parsed_key: str | None = None
+    knowledge_parsed_ir_key: str | None = None
     customer_id = str(uuid4())
     rfp_id = str(uuid4())
     source_document_id = str(uuid4())
@@ -181,7 +182,9 @@ async def test_capability_worker_retrieves_qdrant_evidence_and_persists_results(
         await upload.close()
         knowledge_source_key = knowledge_document.object_key
         knowledge_parsed_key = knowledge_document.parsed_text_object_key
+        knowledge_parsed_ir_key = knowledge_document.parsed_ir_object_key
         assert knowledge_document.status == DocumentStatus.READY.value
+        assert knowledge_parsed_ir_key is not None
 
         async with async_session_factory() as session, session.begin():
             session.add(
@@ -361,6 +364,7 @@ async def test_capability_worker_retrieves_qdrant_evidence_and_persists_results(
         for object_key in (
             knowledge_source_key,
             knowledge_parsed_key,
+            knowledge_parsed_ir_key,
             proposal_markdown_key,
         ):
             if object_key:

@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.db.session import async_session_factory, engine
+from app.documents.pdf.models import DocumentIR
 from app.infrastructure.messaging.kafka import get_kafka_service
 from app.infrastructure.storage.minio import ObjectStorageService
 from app.main import app
@@ -89,6 +90,7 @@ async def test_worker_processes_uploaded_rfp_and_query_endpoints() -> None:
     rfp_id: str | None = None
     source_key: str | None = None
     parsed_key: str | None = None
+    parsed_ir_key: str | None = None
     storage = ObjectStorageService(settings)
     worker_settings = settings.model_copy(
         update={
@@ -157,6 +159,7 @@ async def test_worker_processes_uploaded_rfp_and_query_endpoints() -> None:
             assert detail["workflow_runs"][0]["status"] == WorkflowStatus.RUNNING.value
             assert detail["workflow_runs"][0]["current_node"] == "capability_agent"
             parsed_key = detail["documents"][0]["parsed_text_object_key"]
+            parsed_ir_key = detail["documents"][0]["parsed_ir_object_key"]
 
             requirements_response = await client.get(f"/rfps/{rfp_id}/requirements")
             assert requirements_response.status_code == 200, requirements_response.text
@@ -185,6 +188,9 @@ async def test_worker_processes_uploaded_rfp_and_query_endpoints() -> None:
         assert parsed_key is not None
         parsed_text = await storage.download(settings.minio_bucket, parsed_key)
         assert b"DealFlow worker integration requirement" in parsed_text
+        assert parsed_ir_key is not None
+        parsed_ir = await storage.download(settings.minio_bucket, parsed_ir_key)
+        assert DocumentIR.model_validate_json(parsed_ir).page_count == 1
 
         async with async_session_factory() as session, session.begin():
             document = await session.scalar(select(Document).where(Document.rfp_id == rfp_id))
@@ -222,7 +228,8 @@ async def test_worker_processes_uploaded_rfp_and_query_endpoints() -> None:
                 if document is not None:
                     source_key = document.object_key
                     parsed_key = parsed_key or document.parsed_text_object_key
-        for object_key in (source_key, parsed_key):
+                    parsed_ir_key = parsed_ir_key or document.parsed_ir_object_key
+        for object_key in (source_key, parsed_key, parsed_ir_key):
             if object_key is not None:
                 await storage.remove(settings.minio_bucket, object_key)
 

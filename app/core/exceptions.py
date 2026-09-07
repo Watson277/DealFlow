@@ -89,5 +89,9 @@ class LockNotAcquiredError(DealFlowError):
     pass
 
 
+class LockOwnershipLostError(LockNotAcquiredError):
+    """Raised when a worker can no longer prove that it owns a distributed lock."""
+
+
 class ObjectStorageError(DealFlowError):
     pass

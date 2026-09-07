@@ -13,6 +13,7 @@ from app.core.exceptions import LockNotAcquiredError
 from app.core.logging import configure_logging
 from app.db.session import close_database
 from app.infrastructure.locking.redis import DistributedLockService
+from app.infrastructure.messaging.consumed_events import ConsumedEventTracker
 from app.infrastructure.messaging.kafka import KafkaProducerService
 from app.infrastructure.messaging.outbox import OutboxPublisher
 from app.rag.embedding import EmbeddingService, OpenAIEmbeddingService
@@ -45,6 +46,9 @@ class CapabilityWorker:
             value_deserializer=orjson.loads,
         )
         self.kafka = KafkaProducerService(self.settings)
+        self.consumed_events = ConsumedEventTracker(
+            self.settings.kafka_capability_worker_group
+        )
         self.locks = DistributedLockService(self.settings)
         self.vector_store = vector_store or QdrantKnowledgeStore(self.settings)
         self.processor = CapabilityProcessingService(
@@ -90,7 +94,21 @@ class CapabilityWorker:
                     continue
 
                 try:
-                    await self.processor.process(event)
+                    if await self.consumed_events.is_consumed(event.event_id):
+                        logger.info(
+                            "capability_duplicate_event_skipped",
+                            event_id=event.event_id,
+                            rfp_id=event.rfp_id,
+                        )
+                    else:
+                        await self.processor.process(event)
+                        await self.consumed_events.record(
+                            event_id=event.event_id,
+                            event_type=event.event_type,
+                            topic=message.topic,
+                            partition=message.partition,
+                            offset=message.offset,
+                        )
                 except LockNotAcquiredError:
                     logger.warning("capability_lock_busy", rfp_id=event.rfp_id)
                     partition = TopicPartition(message.topic, message.partition)

@@ -2,6 +2,7 @@
 
 from app.db.base import Base
 from app.models.capability import CapabilityEvidence, CapabilityResult
+from app.models.consumed_event import ConsumedEvent
 from app.models.customer import Customer
 from app.models.document import Document
 from app.models.knowledge_chunk import KnowledgeChildIndexRecord, KnowledgeChunkRecord
@@ -16,6 +17,7 @@ __all__ = [
     "Base",
     "CapabilityEvidence",
     "CapabilityResult",
+    "ConsumedEvent",
     "Customer",
     "Document",
     "KnowledgeChunkRecord",
