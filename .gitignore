@@ -19,3 +19,5 @@ web/vite.config.d.ts
 web/dealflow-ui.png
 web/test-results/
 data/processed-documents/
+docs/
+tests/
