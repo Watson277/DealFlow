@@ -7,36 +7,36 @@ Ground Truth 按页对齐；CER 计算前执行 Unicode NFKC，并删除全部�
 
 | 范围 | 方法 | Micro CER | Macro CER | 页面 CER P50 | 页面 CER P95 | 完全匹配页 | 空白页准确率 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 全部 147 页 | Direct PyMuPDF | 28.94% | 20.93% | 10.75% | 100.00% | 2.72% | 100.00% |
-| 全部 147 页 | DealFlow DocumentIR | 33.04% | 26.55% | 14.09% | 100.15% | 2.72% | 100.00% |
-| 已复核子集 | Direct PyMuPDF | 32.28% | 21.84% | 8.29% | 100.00% | 3.57% | 100.00% |
-| 已复核子集 | DealFlow DocumentIR | 34.92% | 26.32% | 11.92% | 100.21% | 3.57% | 100.00% |
+| 全部 147 页 | Direct PyMuPDF | 28.95% | 20.94% | 10.75% | 100.00% | 2.72% | 100.00% |
+| 全部 147 页 | DealFlow DocumentIR | 3.91% | 4.78% | 1.88% | 17.79% | 2.72% | 100.00% |
+| 已复核子集 | Direct PyMuPDF | 32.26% | 21.82% | 8.29% | 100.00% | 3.57% | 100.00% |
+| 已复核子集 | DealFlow DocumentIR | 1.66% | 2.59% | 0.90% | 9.84% | 3.57% | 100.00% |
 
 ## 对比
 
-- Micro CER 绝对变化（普通方法减 DealFlow）：-4.10%
-- Micro CER 相对变化：-14.18%
+- Micro CER 绝对变化（普通方法减 DealFlow）：25.03%
+- Micro CER 相对变化：86.48%
 
 ## DealFlow 最差页面
 
 | 页码 | CER | 真值字符数 | 预测字符数 | 真值复核状态 |
 | ---: | ---: | ---: | ---: | --- |
-| 89 | 175.80% | 529 | 1004 | auto_verified |
-| 62 | 100.65% | 764 | 1360 | needs_manual_review |
-| 136 | 100.46% | 1754 | 1762 | auto_verified |
-| 143 | 100.33% | 896 | 899 | auto_verified |
-| 138 | 100.33% | 1800 | 1806 | auto_verified |
-| 137 | 100.26% | 1892 | 1897 | auto_verified |
-| 142 | 100.26% | 1922 | 1927 | auto_verified |
-| 140 | 100.16% | 1872 | 1875 | visually_spot_checked |
-| 133 | 100.13% | 1566 | 1572 | auto_verified |
-| 135 | 100.11% | 1767 | 1769 | auto_verified |
-| 139 | 100.06% | 1734 | 1735 | auto_verified |
-| 141 | 100.00% | 1922 | 1922 | auto_verified |
-| 145 | 98.58% | 1694 | 1711 | auto_verified |
-| 134 | 98.35% | 1698 | 1704 | auto_verified |
-| 146 | 95.19% | 1642 | 1645 | auto_verified |
+| 147 | 40.82% | 49 | 69 | visually_spot_checked |
+| 67 | 33.31% | 1261 | 1300 | needs_manual_review |
+| 57 | 28.04% | 731 | 759 | needs_manual_review |
+| 39 | 20.52% | 970 | 1001 | needs_manual_review |
+| 84 | 19.84% | 756 | 764 | needs_manual_review |
+| 69 | 19.26% | 675 | 701 | needs_manual_review |
+| 83 | 18.55% | 744 | 773 | needs_manual_review |
+| 81 | 17.96% | 952 | 979 | needs_manual_review |
+| 68 | 17.39% | 719 | 731 | needs_manual_review |
+| 74 | 16.73% | 544 | 532 | needs_manual_review |
+| 52 | 16.46% | 723 | 729 | needs_manual_review |
+| 85 | 15.64% | 748 | 775 | needs_manual_review |
+| 51 | 15.43% | 797 | 821 | needs_manual_review |
+| 56 | 15.16% | 739 | 745 | needs_manual_review |
+| 11 | 14.38% | 939 | 944 | auto_verified |
 
 ## 结论
 
-该文档存在损坏的 TeX CMR 字体到 Unicode 映射，拉丁字母、数字和标点会被暴露为无关的 CJK 码位。DealFlow 当前仍把这些页面分类为原生文本页并保留错误字符；版面分析只能调整 Block 结构，不能修复字符映射。
+DealFlow 通过字体感知的 TeX OT1 映射修复恢复原生英文文本，并通过原生表格质量门过滤图表线条误检；其 Micro CER 低于 Direct PyMuPDF 基线。
