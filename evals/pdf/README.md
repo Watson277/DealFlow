@@ -33,3 +33,13 @@ and text that exists only inside raster figures are outside this dataset's scope
 The initial output is a silver ground truth. Pages flagged in `review.csv`, especially
 those containing formulas, must be checked against rendered pages before promoting the
 dataset version from `silver` to `gold`.
+
+Compare direct PyMuPDF extraction with a DealFlow `DocumentIR` result:
+
+```powershell
+python evals/pdf/evaluate_native_cer.py `
+  --pdf "E:\study2\贵州\report.pdf" `
+  --ground-truth "evals\pdf\ground_truth\report-native-147\ground-truth.jsonl" `
+  --document-ir "report.document-ir.json" `
+  --output "evals\pdf\reports\report-native-147"
+```

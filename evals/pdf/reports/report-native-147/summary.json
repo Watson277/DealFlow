@@ -1,0 +1,70 @@
+{
+  "comparison": {
+    "absolute_micro_cer_change": -0.0410315721748189,
+    "relative_micro_cer_change": -0.14178709438356907
+  },
+  "dataset": {
+    "ground_truth": "evals\\pdf\\ground_truth\\report-native-147\\ground-truth.jsonl",
+    "ground_truth_quality": "silver",
+    "pages": 147,
+    "source_filename": "report.pdf"
+  },
+  "methods": {
+    "dealflow_document_ir": {
+      "all_pages": {
+        "blank_page_accuracy": 1.0,
+        "edit_distance": 43139,
+        "exact_page_rate": 0.027210884353741496,
+        "extraction_seconds": null,
+        "ground_truth_characters": 130558,
+        "macro_cer": 0.26554333176996997,
+        "median_page_cer": 0.14089775561097256,
+        "micro_cer": 0.33042019638781234,
+        "p95_page_cer": 1.001504936634247,
+        "pages": 147,
+        "prediction_characters": 134818
+      },
+      "reviewed_subset": {
+        "blank_page_accuracy": 1.0,
+        "edit_distance": 35260,
+        "exact_page_rate": 0.03571428571428571,
+        "extraction_seconds": null,
+        "ground_truth_characters": 100975,
+        "macro_cer": 0.26319136680123495,
+        "median_page_cer": 0.11924733672996758,
+        "micro_cer": 0.34919534538252045,
+        "p95_page_cer": 1.002052065823528,
+        "pages": 112,
+        "prediction_characters": 103221
+      }
+    },
+    "pymupdf_direct": {
+      "all_pages": {
+        "blank_page_accuracy": 1.0,
+        "edit_distance": 37782,
+        "exact_page_rate": 0.027210884353741496,
+        "extraction_seconds": 0.4715829999768175,
+        "ground_truth_characters": 130558,
+        "macro_cer": 0.20925200961076762,
+        "median_page_cer": 0.10752688172043011,
+        "micro_cer": 0.28938862421299344,
+        "p95_page_cer": 1.0,
+        "pages": 147,
+        "prediction_characters": 130538
+      },
+      "reviewed_subset": {
+        "blank_page_accuracy": 1.0,
+        "edit_distance": 32592,
+        "exact_page_rate": 0.03571428571428571,
+        "extraction_seconds": 0.4715829999768175,
+        "ground_truth_characters": 100975,
+        "macro_cer": 0.2184387702367532,
+        "median_page_cer": 0.08286756319087517,
+        "micro_cer": 0.3227729636048527,
+        "p95_page_cer": 1.0,
+        "pages": 112,
+        "prediction_characters": 100917
+      }
+    }
+  }
+}
