@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class PDFParsingConfig:
-    parser_version: str = "page-routing-layout-2.1"
+    parser_version: str = "page-routing-layout-2.2"
     max_pages: int = 500
     min_effective_chars: int = 20
     max_garbled_ratio: float = 0.10

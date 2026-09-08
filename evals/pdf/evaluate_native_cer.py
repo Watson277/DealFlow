@@ -14,7 +14,6 @@ from typing import Any
 
 import pymupdf
 
-
 EXCLUDED_DOCUMENT_IR_TYPES = {"header", "footer"}
 
 
@@ -92,7 +91,7 @@ def _direct_pymupdf_pages(pdf_path: Path) -> tuple[list[str], float]:
     started = time.perf_counter()
     output: list[str] = []
     flags = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_IMAGES
-    with pymupdf.open(pdf_path) as document:
+    with pymupdf.open(pdf_path) as document:  # type: ignore[no-untyped-call]
         for page_number, page in enumerate(document, start=1):
             data = page.get_text("dict", sort=True, flags=flags)
             top_limit = page.rect.height * 0.075
@@ -216,15 +215,34 @@ def _percentage(value: float | None) -> str:
 
 
 def _report_markdown(report: dict[str, Any], details: list[dict[str, Any]]) -> str:
+    page_count = report["dataset"]["pages"]
+    direct_micro = report["methods"]["pymupdf_direct"]["all_pages"]["micro_cer"]
+    dealflow_micro = report["methods"]["dealflow_document_ir"]["all_pages"]["micro_cer"]
+    if dealflow_micro < direct_micro:
+        conclusion = (
+            "DealFlow 通过字体感知的 TeX OT1 映射修复恢复原生英文文本，并通过原生表格"
+            "质量门过滤图表线条误检；其 Micro CER 低于 Direct PyMuPDF 基线。"
+        )
+    else:
+        conclusion = (
+            "DealFlow 的 Micro CER 尚未低于 Direct PyMuPDF 基线，需要继续检查最差页面的"
+            "字体映射、阅读顺序和表格误检。"
+        )
     lines = [
         "# 原生 PDF 文本提取 CER 对比",
         "",
         "Ground Truth 按页对齐；CER 计算前执行 Unicode NFKC，并删除全部空白字符。",
-        "普通基线直接读取 PyMuPDF 文本块并按几何边界去除页眉页脚；DealFlow 使用 DocumentIR 阅读顺序，并排除被识别为页眉或页脚的 Block。",
+        (
+            "普通基线直接读取 PyMuPDF 文本块并按几何边界去除页眉页脚；DealFlow 使用 "
+            "DocumentIR 阅读顺序，并排除被识别为页眉或页脚的 Block。"
+        ),
         "",
         "## 结果",
         "",
-        "| 范围 | 方法 | Micro CER | Macro CER | 页面 CER P50 | 页面 CER P95 | 完全匹配页 | 空白页准确率 |",
+        (
+            "| 范围 | 方法 | Micro CER | Macro CER | 页面 CER P50 | 页面 CER P95 | "
+            "完全匹配页 | 空白页准确率 |"
+        ),
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     method_labels = {
@@ -238,7 +256,7 @@ def _report_markdown(report: dict[str, Any], details: list[dict[str, Any]]) -> s
                 "| "
                 + " | ".join(
                     [
-                        "全部 147 页" if scope == "all_pages" else "已复核子集",
+                        f"全部 {page_count} 页" if scope == "all_pages" else "已复核子集",
                         label,
                         _percentage(metrics["micro_cer"]),
                         _percentage(metrics["macro_cer"]),
@@ -255,8 +273,10 @@ def _report_markdown(report: dict[str, Any], details: list[dict[str, Any]]) -> s
             "",
             "## 对比",
             "",
-            f"- Micro CER 绝对变化（普通方法减 DealFlow）：{_percentage(report['comparison']['absolute_micro_cer_change'])}",
-            f"- Micro CER 相对变化：{_percentage(report['comparison']['relative_micro_cer_change'])}",
+            "- Micro CER 绝对变化（普通方法减 DealFlow）："
+            f"{_percentage(report['comparison']['absolute_micro_cer_change'])}",
+            "- Micro CER 相对变化："
+            f"{_percentage(report['comparison']['relative_micro_cer_change'])}",
             "",
             "## DealFlow 最差页面",
             "",
@@ -278,7 +298,7 @@ def _report_markdown(report: dict[str, Any], details: list[dict[str, Any]]) -> s
             "",
             "## 结论",
             "",
-            "该文档存在损坏的 TeX CMR 字体到 Unicode 映射，拉丁字母、数字和标点会被暴露为无关的 CJK 码位。DealFlow 当前仍把这些页面分类为原生文本页并保留错误字符；版面分析只能调整 Block 结构，不能修复字符映射。",
+            conclusion,
             "",
         ]
     )

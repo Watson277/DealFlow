@@ -57,6 +57,7 @@ from app.documents.pdf.models import (
 from app.documents.pdf.ocr import OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidator
 from app.documents.pdf.quality import BBoxTuple, PageQuality, PageQualityDetector
+from app.documents.pdf.text_normalization import normalize_pdf_span
 from app.documents.pdf.vision import DisabledVisionProvider, VisionProvider, VisionRegionResult
 
 logger = structlog.get_logger(__name__)
@@ -372,6 +373,9 @@ class NativePDFParser:
                 include_ocr_required=not self.config.ocr_enabled,
             )
         )
+        font_repair_warning = _font_repair_warning(page_number, native_text_candidates)
+        if font_repair_warning is not None:
+            warnings.append(font_repair_warning)
         if quality.page_type in {PDFPageType.SCANNED, PDFPageType.MIXED}:
             routed = self._extract_scanned_or_mixed_page(
                 page,
@@ -424,6 +428,7 @@ class NativePDFParser:
             warnings=tuple(warnings),
             metadata={
                 "quality": quality.as_metadata(),
+                "text_normalization": _text_normalization_metadata(native_text_candidates),
                 "routing": {
                     "scope": "page",
                     "page_type": quality.page_type.value,
@@ -465,6 +470,22 @@ class NativePDFParser:
                     page_number=page_number,
                 )
             )
+        if table_extraction.rejected_count:
+            warnings.append(
+                ParseWarning(
+                    code="NATIVE_TABLE_CANDIDATE_REJECTED",
+                    message=(
+                        "Low-quality native table candidates were rejected; "
+                        "positioned body text was retained"
+                    ),
+                    severity=PDFWarningSeverity.INFO,
+                    page_number=page_number,
+                    details={
+                        "rejected_count": table_extraction.rejected_count,
+                        "reasons": cast(JsonValue, list(table_extraction.rejection_reasons)),
+                    },
+                )
+            )
         return _RoutedExtraction(
             candidates=[
                 *native_text_candidates,
@@ -482,6 +503,7 @@ class NativePDFParser:
                     "native_table_count": len(table_extraction.tables),
                     "scanned_table_count": 0,
                     "failed": table_extraction.failed,
+                    "rejected_count": table_extraction.rejected_count,
                 },
                 "vision": {"requested": False, "enabled": self.config.vlm_enabled},
             },
@@ -754,14 +776,30 @@ class NativePDFParser:
             if bbox is None:
                 continue
             lines: list[str] = []
+            raw_lines: list[str] = []
             font_names: set[str] = set()
             font_sizes: set[float] = set()
+            repaired_fonts: set[str] = set()
+            repaired_character_count = 0
             span_count = 0
             for line in raw_block.get("lines", []):
                 spans = line.get("spans", [])
-                line_text = "".join(str(span.get("text", "")) for span in spans)
+                normalized_spans: list[str] = []
+                raw_spans: list[str] = []
+                for span in spans:
+                    raw_span_text = str(span.get("text", ""))
+                    font_name = str(span.get("font", ""))
+                    normalized = normalize_pdf_span(raw_span_text, font_name)
+                    raw_spans.append(raw_span_text)
+                    normalized_spans.append(normalized.text)
+                    repaired_character_count += normalized.repaired_character_count
+                    if normalized.repaired_character_count:
+                        repaired_fonts.add(font_name)
+                line_text = "".join(normalized_spans)
+                raw_line_text = "".join(raw_spans)
                 if line_text.strip():
                     lines.append(line_text.rstrip())
+                    raw_lines.append(raw_line_text.rstrip())
                 for span in spans:
                     span_count += 1
                     if span.get("font"):
@@ -771,6 +809,7 @@ class NativePDFParser:
                     except (TypeError, ValueError):
                         continue
             text = "\n".join(lines).strip()
+            raw_text = "\n".join(raw_lines).strip()
             if not text:
                 continue
             candidates.append(
@@ -778,7 +817,7 @@ class NativePDFParser:
                     bbox=bbox,
                     type=PDFBlockType.TEXT,
                     text=text,
-                    raw_text=text,
+                    raw_text=raw_text,
                     source=PDFBlockSource.NATIVE,
                     confidence=None,
                     table_markdown=None,
@@ -790,6 +829,12 @@ class NativePDFParser:
                             JsonValue, sorted(size for size in font_sizes if size > 0)
                         ),
                         "is_bold": any("bold" in name.casefold() for name in font_names),
+                        "font_encoding_repaired": repaired_character_count > 0,
+                        "font_encoding": (
+                            "tex_ot1_u9000_offset" if repaired_character_count else None
+                        ),
+                        "repaired_character_count": repaired_character_count,
+                        "repaired_fonts": cast(JsonValue, sorted(repaired_fonts)),
                     },
                 )
             )
@@ -941,6 +986,47 @@ def _quality_warnings(
             )
         )
     return tuple(warnings)
+
+
+def _text_normalization_metadata(
+    candidates: list[_BlockCandidate],
+) -> dict[str, JsonValue]:
+    repaired_count = 0
+    repaired_font_names: set[str] = set()
+    for candidate in candidates:
+        candidate_count = candidate.metadata.get("repaired_character_count", 0)
+        if isinstance(candidate_count, int):
+            repaired_count += candidate_count
+        candidate_fonts = candidate.metadata.get("repaired_fonts", [])
+        if isinstance(candidate_fonts, list):
+            repaired_font_names.update(
+                str(font) for font in candidate_fonts if isinstance(font, str)
+            )
+    repaired_fonts = sorted(repaired_font_names)
+    return {
+        "font_aware": True,
+        "encoding": "tex_ot1_u9000_offset" if repaired_count else None,
+        "repaired_character_count": repaired_count,
+        "repaired_fonts": cast(JsonValue, repaired_fonts),
+    }
+
+
+def _font_repair_warning(
+    page_number: int,
+    candidates: list[_BlockCandidate],
+) -> ParseWarning | None:
+    metadata = _text_normalization_metadata(candidates)
+    repaired_value = metadata["repaired_character_count"]
+    repaired_count = repaired_value if isinstance(repaired_value, int) else 0
+    if not repaired_count:
+        return None
+    return ParseWarning(
+        code="FONT_ENCODING_REPAIRED",
+        message="Malformed TeX OT1 native text was repaired using font-aware decoding",
+        severity=PDFWarningSeverity.INFO,
+        page_number=page_number,
+        details=metadata,
+    )
 
 
 def _ocr_candidates(

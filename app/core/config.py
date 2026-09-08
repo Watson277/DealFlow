@@ -75,7 +75,7 @@ class Settings(BaseSettings):
 
     max_rfp_upload_size_bytes: int = 50 * 1024 * 1024
     pdf_parser_version: str = Field(
-        default="page-routing-layout-2.1",
+        default="page-routing-layout-2.2",
         min_length=1,
         max_length=64,
     )
