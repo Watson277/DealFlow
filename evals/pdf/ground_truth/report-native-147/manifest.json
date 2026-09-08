@@ -1,0 +1,60 @@
+{
+  "cer_normalization": [
+    "Unicode NFKC",
+    "remove all Unicode whitespace"
+  ],
+  "dataset_version": "1.0.0-silver",
+  "excludes": [
+    "running_headers",
+    "page_numbers",
+    "raster_only_figure_text"
+  ],
+  "font_repairs": {
+    "affected_fonts": [
+      "CMR10",
+      "CMR12"
+    ],
+    "encoding": "TeX OT1",
+    "repaired_character_count": 35523
+  },
+  "includes": [
+    "body_text",
+    "headings",
+    "captions",
+    "tables",
+    "selectable_equations"
+  ],
+  "independent_extractor": "Poppler pdftohtml XML",
+  "page_count": 147,
+  "quality": {
+    "auto_verified_pages": 108,
+    "label": "silver_ground_truth",
+    "pages_requiring_manual_review": 35,
+    "review_flag_counts": {
+      "MATH_CONTENT": 35
+    },
+    "verified_blank_pages": [
+      90,
+      112,
+      132,
+      144
+    ],
+    "visually_spot_checked_pages": [
+      1,
+      2,
+      5,
+      20,
+      50,
+      51,
+      90,
+      112,
+      132,
+      140,
+      144,
+      147
+    ]
+  },
+  "scope": "native_selectable_text",
+  "source_filename": "report.pdf",
+  "source_sha256": "b9d778bd0584e2c9891662171641ac726b74eadd0cf842b764d61b1023bc0c62"
+}
