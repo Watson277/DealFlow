@@ -573,9 +573,9 @@ class NativePDFParser:
                     vlm_failed += 1
                 candidates.append(_image_region_candidate(region, vision_result))
 
+        layout_content_extracted = ocr_blocks > 0 or scanned_tables > 0 or vlm_applied > 0
         full_page_fallback = layout_result is None or (
-            self.config.ocr_enabled
-            and not any(candidate.source is PDFBlockSource.OCR for candidate in candidates)
+            self.config.ocr_enabled and not layout_content_extracted
         )
         if full_page_fallback and self.config.ocr_enabled and not _ocr_is_unavailable(warnings):
             fallback_result = self._ocr_page(page, page_number, warnings)
@@ -596,14 +596,18 @@ class NativePDFParser:
                     details={"provider": layout_result.provider},
                 )
             )
-        if ocr_blocks:
+        if ocr_blocks or scanned_tables:
             warnings.append(
                 ParseWarning(
                     code="OCR_APPLIED",
-                    message="OCR supplied positioned text for page-level layout regions",
+                    message="OCR supplied positioned text or structured table cells",
                     severity=PDFWarningSeverity.INFO,
                     page_number=page_number,
-                    details={"provider": self.ocr_provider.name, "block_count": ocr_blocks},
+                    details={
+                        "provider": self.ocr_provider.name,
+                        "block_count": ocr_blocks,
+                        "table_count": scanned_tables,
+                    },
                 )
             )
         elif self.config.ocr_enabled and not any(
@@ -639,9 +643,10 @@ class NativePDFParser:
                 "ocr": {
                     "requested": quality.requires_ocr or quality.page_type is PDFPageType.MIXED,
                     "enabled": self.config.ocr_enabled,
-                    "applied": ocr_blocks > 0,
+                    "applied": ocr_blocks > 0 or scanned_tables > 0,
                     "provider": self.ocr_provider.name,
                     "region_block_count": ocr_blocks,
+                    "table_count": scanned_tables,
                     "whole_page_fallback": full_page_fallback,
                 },
                 "table_detection": {

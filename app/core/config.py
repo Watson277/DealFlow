@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     pdf_text_max_garbled_ratio: float = Field(default=0.10, ge=0.0, le=1.0)
     pdf_scanned_image_coverage_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
     pdf_mixed_image_coverage_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    pdf_significant_image_min_area_ratio: float = Field(default=0.02, gt=0.0, le=1.0)
+    pdf_significant_image_min_width_ratio: float = Field(default=0.20, gt=0.0, le=1.0)
+    pdf_significant_image_min_height_ratio: float = Field(default=0.08, gt=0.0, le=1.0)
     pdf_ocr_enabled: bool = True
     pdf_ocr_dpi: int = Field(default=250, ge=72, le=600)
     pdf_ocr_languages: str = Field(default="chi_sim+eng", min_length=1, max_length=128)

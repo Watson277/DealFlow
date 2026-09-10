@@ -26,6 +26,9 @@ class PageQuality:
     garbled_ratio: float
     text_coverage: float
     image_coverage: float
+    significant_image_count: int
+    significant_image_coverage: float
+    largest_image_area_ratio: float
 
     def as_metadata(self) -> dict[str, JsonValue]:
         return {
@@ -35,6 +38,9 @@ class PageQuality:
             "garbled_ratio": self.garbled_ratio,
             "text_coverage": self.text_coverage,
             "image_coverage": self.image_coverage,
+            "significant_image_count": self.significant_image_count,
+            "significant_image_coverage": self.significant_image_coverage,
+            "largest_image_area_ratio": self.largest_image_area_ratio,
             "requires_ocr": self.requires_ocr,
         }
 
@@ -58,11 +64,32 @@ class PageQualityDetector:
         garbled_ratio = len(garbled_chars) / len(visible_chars) if visible_chars else 0.0
         text_coverage = _coverage_ratio(text_bboxes, page_width, page_height)
         image_coverage = _coverage_ratio(image_bboxes, page_width, page_height)
+        significant_images = _significant_image_rectangles(
+            image_bboxes,
+            page_width,
+            page_height,
+            min_area_ratio=self.config.significant_image_min_area_ratio,
+            min_width_ratio=self.config.significant_image_min_width_ratio,
+            min_height_ratio=self.config.significant_image_min_height_ratio,
+        )
+        significant_image_coverage = _coverage_ratio(
+            significant_images,
+            page_width,
+            page_height,
+        )
+        largest_image_area_ratio = max(
+            (
+                _rectangle_area_ratio(rectangle, page_width, page_height)
+                for rectangle in image_bboxes
+            ),
+            default=0.0,
+        )
 
         page_type, requires_ocr = self._classify(
             effective_char_count=effective_char_count,
             garbled_ratio=garbled_ratio,
             image_coverage=image_coverage,
+            has_significant_image=bool(significant_images),
         )
         confidence = _classification_confidence(
             page_type=page_type,
@@ -81,6 +108,9 @@ class PageQualityDetector:
             garbled_ratio=round(garbled_ratio, 6),
             text_coverage=round(text_coverage, 6),
             image_coverage=round(image_coverage, 6),
+            significant_image_count=len(significant_images),
+            significant_image_coverage=round(significant_image_coverage, 6),
+            largest_image_area_ratio=round(largest_image_area_ratio, 6),
         )
 
     def _classify(
@@ -89,9 +119,13 @@ class PageQualityDetector:
         effective_char_count: int,
         garbled_ratio: float,
         image_coverage: float,
+        has_significant_image: bool,
     ) -> tuple[PDFPageType, bool]:
         if effective_char_count == 0:
-            if image_coverage >= self.config.scanned_image_coverage_threshold:
+            if (
+                image_coverage >= self.config.scanned_image_coverage_threshold
+                or has_significant_image
+            ):
                 return PDFPageType.SCANNED, True
             return PDFPageType.EMPTY, False
 
@@ -100,7 +134,10 @@ class PageQualityDetector:
 
         if (
             effective_char_count < self.config.min_effective_chars
-            and image_coverage >= self.config.scanned_image_coverage_threshold
+            and (
+                image_coverage >= self.config.scanned_image_coverage_threshold
+                or has_significant_image
+            )
         ):
             return PDFPageType.SCANNED, True
 
@@ -175,3 +212,54 @@ def _coverage_ratio(
             merged_height += current_end - current_start
         covered_area += (right - left) * merged_height
     return min(1.0, covered_area / (page_width * page_height))
+
+
+def _significant_image_rectangles(
+    rectangles: Sequence[BBoxTuple],
+    page_width: float,
+    page_height: float,
+    *,
+    min_area_ratio: float,
+    min_width_ratio: float,
+    min_height_ratio: float,
+) -> list[BBoxTuple]:
+    if page_width <= 0 or page_height <= 0:
+        return []
+    significant: list[BBoxTuple] = []
+    for rectangle in rectangles:
+        x0, y0, x1, y1 = _clip_rectangle(rectangle, page_width, page_height)
+        width_ratio = max(0.0, x1 - x0) / page_width
+        height_ratio = max(0.0, y1 - y0) / page_height
+        area_ratio = width_ratio * height_ratio
+        if (
+            area_ratio >= min_area_ratio
+            and width_ratio >= min_width_ratio
+            and height_ratio >= min_height_ratio
+        ):
+            significant.append((x0, y0, x1, y1))
+    return significant
+
+
+def _rectangle_area_ratio(
+    rectangle: BBoxTuple,
+    page_width: float,
+    page_height: float,
+) -> float:
+    if page_width <= 0 or page_height <= 0:
+        return 0.0
+    x0, y0, x1, y1 = _clip_rectangle(rectangle, page_width, page_height)
+    return max(0.0, x1 - x0) * max(0.0, y1 - y0) / (page_width * page_height)
+
+
+def _clip_rectangle(
+    rectangle: BBoxTuple,
+    page_width: float,
+    page_height: float,
+) -> BBoxTuple:
+    x0, y0, x1, y1 = rectangle
+    return (
+        max(0.0, min(page_width, x0)),
+        max(0.0, min(page_height, y0)),
+        max(0.0, min(page_width, x1)),
+        max(0.0, min(page_height, y1)),
+    )

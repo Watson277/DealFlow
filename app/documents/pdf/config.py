@@ -17,6 +17,9 @@ class PDFParsingConfig:
     max_garbled_ratio: float = 0.10
     scanned_image_coverage_threshold: float = 0.60
     mixed_image_coverage_threshold: float = 0.35
+    significant_image_min_area_ratio: float = 0.02
+    significant_image_min_width_ratio: float = 0.20
+    significant_image_min_height_ratio: float = 0.08
     ocr_enabled: bool = True
     ocr_dpi: int = 250
     ocr_languages: str = "chi_sim+eng"
@@ -54,6 +57,9 @@ class PDFParsingConfig:
             ("max_garbled_ratio", self.max_garbled_ratio),
             ("scanned_image_coverage_threshold", self.scanned_image_coverage_threshold),
             ("mixed_image_coverage_threshold", self.mixed_image_coverage_threshold),
+            ("significant_image_min_area_ratio", self.significant_image_min_area_ratio),
+            ("significant_image_min_width_ratio", self.significant_image_min_width_ratio),
+            ("significant_image_min_height_ratio", self.significant_image_min_height_ratio),
         ):
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be between zero and one")
@@ -109,6 +115,9 @@ class PDFParsingConfig:
             max_garbled_ratio=settings.pdf_text_max_garbled_ratio,
             scanned_image_coverage_threshold=settings.pdf_scanned_image_coverage_threshold,
             mixed_image_coverage_threshold=settings.pdf_mixed_image_coverage_threshold,
+            significant_image_min_area_ratio=settings.pdf_significant_image_min_area_ratio,
+            significant_image_min_width_ratio=settings.pdf_significant_image_min_width_ratio,
+            significant_image_min_height_ratio=settings.pdf_significant_image_min_height_ratio,
             ocr_enabled=settings.pdf_ocr_enabled,
             ocr_dpi=settings.pdf_ocr_dpi,
             ocr_languages=settings.pdf_ocr_languages,
