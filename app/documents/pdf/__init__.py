@@ -35,15 +35,7 @@ from app.documents.pdf.models import (
     PDFWarningSeverity,
 )
 from app.documents.pdf.native import NativePDFDocument, NativePDFParser
-from app.documents.pdf.ocr import (
-    FallbackOCRProvider,
-    OCRBlock,
-    OCRPageResult,
-    OCRProvider,
-    PaddleOCRHTTPProvider,
-    TesseractOCRProvider,
-    create_ocr_provider,
-)
+from app.documents.pdf.ocr import OCRBlock, OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult
 from app.documents.pdf.quality import PageQuality, PageQualityDetector
 from app.documents.pdf.serialization import (
@@ -76,7 +68,6 @@ __all__ = [
     "OCRBlock",
     "OCRPageResult",
     "OCRProvider",
-    "PaddleOCRHTTPProvider",
     "PDFBlockSource",
     "PDFBlockType",
     "PDFDocumentType",
@@ -103,10 +94,8 @@ __all__ = [
     "ScannedTableResult",
     "TableStructureRecognizer",
     "TesseractOCRProvider",
-    "FallbackOCRProvider",
     "VisionProvider",
     "VisionRegionResult",
     "document_ir_object_key",
-    "create_ocr_provider",
     "serialize_document_ir",
 ]

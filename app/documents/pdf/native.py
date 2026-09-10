@@ -54,7 +54,7 @@ from app.documents.pdf.models import (
     PDFParseStatus,
     PDFWarningSeverity,
 )
-from app.documents.pdf.ocr import OCRPageResult, OCRProvider, create_ocr_provider
+from app.documents.pdf.ocr import OCRPageResult, OCRProvider, TesseractOCRProvider
 from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidator
 from app.documents.pdf.quality import BBoxTuple, PageQuality, PageQualityDetector
 from app.documents.pdf.text_normalization import normalize_pdf_span
@@ -137,7 +137,9 @@ class NativePDFParser:
         self.preflight = PDFPreflightValidator(self.config)
         self.quality = PageQualityDetector(self.config)
         self.layout = PDFLayoutAnalyzer(self.config)
-        self.ocr_provider = ocr_provider or create_ocr_provider(self.config)
+        self.ocr_provider = (
+            ocr_provider if ocr_provider is not None else TesseractOCRProvider(self.config)
+        )
         self.region_layout = layout_detector or OpenCVLayoutDetector(self.config)
         self.table_recognizer = table_recognizer or OpenCVTableStructureRecognizer(
             self.config,

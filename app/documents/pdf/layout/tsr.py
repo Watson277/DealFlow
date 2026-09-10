@@ -114,12 +114,13 @@ class OpenCVTableStructureRecognizer:
                 f"table grid exceeds the configured {self.config.tsr_max_cells}-cell limit"
             )
 
-        rows: list[list[str]] = [[""] * column_count for _ in range(row_count)]
+        rows: list[list[str]] = []
         cells_metadata: list[JsonValue] = []
-        cell_positions: list[tuple[int, int, BoundingBox]] = []
         for row_index, (top, bottom) in enumerate(zip(y_lines, y_lines[1:], strict=False)):
+            row: list[str] = []
             for column_index, (left, right) in enumerate(zip(x_lines, x_lines[1:], strict=False)):
                 if right - left < 3 or bottom - top < 3:
+                    row.append("")
                     continue
                 cell_bbox = _pixel_to_page_bbox(
                     left + 1,
@@ -130,48 +131,18 @@ class OpenCVTableStructureRecognizer:
                     image_width=pixmap.width,
                     image_height=pixmap.height,
                 )
-                cell_positions.append((row_index, column_index, cell_bbox))
-
-        recognize_regions = getattr(self.ocr_provider, "recognize_regions", None)
-        if callable(recognize_regions):
-            results = tuple(
-                recognize_regions(
-                    page,
-                    page_number,
-                    tuple(position[2] for position in cell_positions),
+                result = self.ocr_provider.recognize_region(page, page_number, cell_bbox)
+                text = " ".join(block.text for block in result.blocks).strip()
+                row.append(_escape_cell(text))
+                cells_metadata.append(
+                    {
+                        "row": row_index,
+                        "column": column_index,
+                        "bbox": cell_bbox.model_dump(mode="json"),
+                        "text": text,
+                    }
                 )
-            )
-        else:
-            results = tuple(
-                self.ocr_provider.recognize_region(page, page_number, position[2])
-                for position in cell_positions
-            )
-        if len(results) != len(cell_positions):
-            raise PDFTableRecognitionError("cell OCR result count does not match the table grid")
-
-        for (row_index, column_index, cell_bbox), result in zip(
-            cell_positions,
-            results,
-            strict=True,
-        ):
-            text = " ".join(block.text for block in result.blocks).strip()
-            confidence_values = [
-                block.confidence for block in result.blocks if block.confidence is not None
-            ]
-            confidence = (
-                sum(confidence_values) / len(confidence_values) if confidence_values else None
-            )
-            rows[row_index][column_index] = _escape_cell(text)
-            cells_metadata.append(
-                {
-                    "row": row_index,
-                    "column": column_index,
-                    "bbox": cell_bbox.model_dump(mode="json"),
-                    "text": text,
-                    "confidence": confidence,
-                    "ocr_provider": result.provider,
-                }
-            )
+            rows.append(row)
         if not any(cell for row in rows for cell in row):
             raise PDFTableRecognitionError("cell OCR returned no table content")
 
