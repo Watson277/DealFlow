@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 if TYPE_CHECKING:
     from app.core.config import Settings
@@ -21,11 +21,17 @@ class PDFParsingConfig:
     significant_image_min_width_ratio: float = 0.20
     significant_image_min_height_ratio: float = 0.08
     ocr_enabled: bool = True
+    ocr_provider: Literal["tesseract", "paddleocr"] = "tesseract"
     ocr_dpi: int = 250
     ocr_languages: str = "chi_sim+eng"
     ocr_timeout_seconds: float = 120.0
     ocr_executable: str = "tesseract"
     ocr_page_segmentation_mode: int = 3
+    paddle_ocr_url: str = "http://paddleocr:8080/v1/ocr"
+    paddle_ocr_model: str = "PP-OCRv6_medium"
+    paddle_ocr_timeout_seconds: float = 120.0
+    paddle_ocr_batch_size: int = 32
+    ocr_fallback_enabled: bool = True
     layout_enabled: bool = True
     layout_detect_tables: bool = True
     layout_header_footer_margin_ratio: float = 0.12
@@ -49,6 +55,8 @@ class PDFParsingConfig:
     def __post_init__(self) -> None:
         if not self.parser_version.strip():
             raise ValueError("parser_version must not be blank")
+        if self.ocr_provider not in {"tesseract", "paddleocr"}:
+            raise ValueError("ocr_provider must be tesseract or paddleocr")
         if self.max_pages < 1:
             raise ValueError("max_pages must be positive")
         if self.min_effective_chars < 1:
@@ -79,6 +87,14 @@ class PDFParsingConfig:
             raise ValueError("ocr_executable must not be blank")
         if not 0 <= self.ocr_page_segmentation_mode <= 13:
             raise ValueError("ocr_page_segmentation_mode must be between 0 and 13")
+        if not self.paddle_ocr_url.strip():
+            raise ValueError("paddle_ocr_url must not be blank")
+        if not self.paddle_ocr_model.strip():
+            raise ValueError("paddle_ocr_model must not be blank")
+        if self.paddle_ocr_timeout_seconds <= 0:
+            raise ValueError("paddle_ocr_timeout_seconds must be positive")
+        if not 1 <= self.paddle_ocr_batch_size <= 256:
+            raise ValueError("paddle_ocr_batch_size must be between one and 256")
         for name, value in (
             ("layout_header_footer_margin_ratio", self.layout_header_footer_margin_ratio),
             ("layout_repeated_region_min_fraction", self.layout_repeated_region_min_fraction),
@@ -119,11 +135,17 @@ class PDFParsingConfig:
             significant_image_min_width_ratio=settings.pdf_significant_image_min_width_ratio,
             significant_image_min_height_ratio=settings.pdf_significant_image_min_height_ratio,
             ocr_enabled=settings.pdf_ocr_enabled,
+            ocr_provider=settings.pdf_ocr_provider,
             ocr_dpi=settings.pdf_ocr_dpi,
             ocr_languages=settings.pdf_ocr_languages,
             ocr_timeout_seconds=settings.pdf_ocr_timeout_seconds,
             ocr_executable=settings.pdf_ocr_executable,
             ocr_page_segmentation_mode=settings.pdf_ocr_page_segmentation_mode,
+            paddle_ocr_url=settings.pdf_paddle_ocr_url,
+            paddle_ocr_model=settings.pdf_paddle_ocr_model,
+            paddle_ocr_timeout_seconds=settings.pdf_paddle_ocr_timeout_seconds,
+            paddle_ocr_batch_size=settings.pdf_paddle_ocr_batch_size,
+            ocr_fallback_enabled=settings.pdf_ocr_fallback_enabled,
             layout_enabled=settings.pdf_layout_enabled,
             layout_detect_tables=settings.pdf_layout_detect_tables,
             layout_header_footer_margin_ratio=settings.pdf_layout_header_footer_margin_ratio,

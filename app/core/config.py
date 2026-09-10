@@ -88,11 +88,21 @@ class Settings(BaseSettings):
     pdf_significant_image_min_width_ratio: float = Field(default=0.20, gt=0.0, le=1.0)
     pdf_significant_image_min_height_ratio: float = Field(default=0.08, gt=0.0, le=1.0)
     pdf_ocr_enabled: bool = True
+    pdf_ocr_provider: Literal["tesseract", "paddleocr"] = "tesseract"
     pdf_ocr_dpi: int = Field(default=250, ge=72, le=600)
     pdf_ocr_languages: str = Field(default="chi_sim+eng", min_length=1, max_length=128)
     pdf_ocr_timeout_seconds: float = Field(default=120.0, gt=0.0, le=600.0)
     pdf_ocr_executable: str = Field(default="tesseract", min_length=1, max_length=512)
     pdf_ocr_page_segmentation_mode: int = Field(default=3, ge=0, le=13)
+    pdf_paddle_ocr_url: str = Field(
+        default="http://paddleocr:8080/v1/ocr",
+        min_length=1,
+        max_length=2_048,
+    )
+    pdf_paddle_ocr_model: str = Field(default="PP-OCRv6_medium", min_length=1, max_length=128)
+    pdf_paddle_ocr_timeout_seconds: float = Field(default=120.0, gt=0.0, le=600.0)
+    pdf_paddle_ocr_batch_size: int = Field(default=32, ge=1, le=256)
+    pdf_ocr_fallback_enabled: bool = True
     pdf_layout_enabled: bool = True
     pdf_layout_detect_tables: bool = True
     pdf_layout_header_footer_margin_ratio: float = Field(default=0.12, gt=0.0, lt=0.5)

@@ -32,6 +32,12 @@ x-app-environment: &app-environment
   CAPABILITY_RERANKER_QUERY_MAX_TOKENS: ${CAPABILITY_RERANKER_QUERY_MAX_TOKENS:-128}
   CAPABILITY_RERANKER_KNOWLEDGE_MAX_TOKENS: ${CAPABILITY_RERANKER_KNOWLEDGE_MAX_TOKENS:-512}
   CAPABILITY_RERANKER_FALLBACK_ENABLED: ${CAPABILITY_RERANKER_FALLBACK_ENABLED:-true}
+  PDF_OCR_PROVIDER: ${PDF_OCR_PROVIDER:-paddleocr}
+  PDF_PADDLE_OCR_URL: ${PDF_PADDLE_OCR_URL:-http://paddleocr:8080/v1/ocr}
+  PDF_PADDLE_OCR_MODEL: ${PDF_PADDLE_OCR_MODEL:-PP-OCRv6_medium}
+  PDF_PADDLE_OCR_TIMEOUT_SECONDS: ${PDF_PADDLE_OCR_TIMEOUT_SECONDS:-120}
+  PDF_PADDLE_OCR_BATCH_SIZE: ${PDF_PADDLE_OCR_BATCH_SIZE:-32}
+  PDF_OCR_FALLBACK_ENABLED: ${PDF_OCR_FALLBACK_ENABLED:-true}
 
 x-app-service: &app-service
   build:
@@ -60,6 +66,37 @@ x-app-dependencies: &app-dependencies
     condition: service_completed_successfully
 
 services:
+  paddleocr:
+    build:
+      context: .
+      dockerfile: Dockerfile.ocr
+    image: dealflow-paddleocr:local
+    container_name: dealflow-paddleocr
+    restart: unless-stopped
+    environment:
+      PADDLE_OCR_DEVICE: ${PADDLE_OCR_DEVICE:-cpu}
+      PADDLE_OCR_MODEL: ${PDF_PADDLE_OCR_MODEL:-PP-OCRv6_medium}
+      PADDLE_PDX_MODEL_SOURCE: ${PADDLE_PDX_MODEL_SOURCE:-BOS}
+    ports:
+      - "${PADDLE_OCR_PORT:-8081}:8080"
+    volumes:
+      - paddleocr_cache:/root/.paddlex
+    shm_size: 2gb
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 6s
+      retries: 40
+      start_period: 60s
+    networks:
+      - dealflow
+
   web:
     build:
       context: ./web
@@ -393,3 +430,5 @@ volumes:
     name: dealflow-minio-data
   huggingface_cache:
     name: dealflow-huggingface-cache
+  paddleocr_cache:
+    name: dealflow-paddleocr-cache

@@ -1,0 +1,29 @@
+FROM python:3.11-slim-bookworm
+
+ARG PADDLE_INDEX_URL=https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PADDLE_PDX_MODEL_SOURCE=BOS
+
+WORKDIR /service
+
+RUN --mount=type=cache,id=dealflow-ocr-apt,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=dealflow-ocr-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends libgomp1 libglib2.0-0
+
+COPY ocr_service/requirements.txt ./requirements.txt
+RUN --mount=type=cache,id=dealflow-ocr-pip,target=/root/.cache/pip,sharing=locked \
+    python -m pip install \
+        --index-url "${PADDLE_INDEX_URL}" \
+        --extra-index-url https://pypi.org/simple \
+        paddlepaddle==3.2.0 \
+    && python -m pip install --index-url https://pypi.org/simple -r requirements.txt
+
+COPY ocr_service ./ocr_service
+
+EXPOSE 8080
+
+CMD ["uvicorn", "ocr_service.main:app", "--host", "0.0.0.0", "--port", "8080"]
