@@ -14,7 +14,6 @@ from app.documents.parser import DocumentParser
 from app.documents.pdf.config import PDFParsingConfig
 from app.documents.pdf.mineru import MinerUPDFParser, convert_layout
 from app.documents.pdf.models import DocumentIR
-from app.documents.pdf.native import NativePDFParser
 
 
 def sample():
@@ -86,11 +85,7 @@ def test_invalid_layout_rejected(damage):
 
 
 def test_backend_selection_and_missing_token():
-    assert isinstance(
-        DocumentParser.from_settings(Settings(_env_file=None, pdf_backend="native")).pdf_parser,
-        NativePDFParser,
-    )
-    parser = DocumentParser.from_settings(Settings(_env_file=None, pdf_backend="mineru"))
+    parser = DocumentParser.from_settings(Settings(_env_file=None))
     assert isinstance(parser.pdf_parser, MinerUPDFParser)
     with pytest.raises(DocumentProcessingError, match="MINERU_API_TOKEN"):
         parser.parse(sample()[0], "test.pdf")
@@ -156,3 +151,27 @@ def test_error_sanitized_no_fallback(monkeypatch):
     with pytest.raises(DocumentProcessingError, match="ConnectError") as error:
         parser.parse(sample()[0], "test.pdf")
     assert "secret" not in str(error.value)
+
+
+def test_endpoint_uses_mineru_even_with_legacy_backend_setting(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    pdf, layout = sample()
+    monkeypatch.setattr(MinerUPDFParser, "_extract", lambda *args: (layout, b"archive"))
+    settings = Settings(
+        _env_file=None,
+        pdf_backend="native",
+        mineru_api_token="test",
+        local_artifact_export_dir=tmp_path,
+    )
+    with TestClient(create_app(settings)) as client:
+        response = client.post("/dev/pdf/parse", files={"file": ("test.pdf", pdf)})
+        assert response.status_code == 200
+        with ZipFile(BytesIO(response.content)) as archive:
+            ir = json.loads(archive.read("test.document-ir.json"))
+        assert ir["parser_version"] == "mineru-preproc-1.0"
+        invalid = client.post("/dev/pdf/parse", files={"file": ("test.pdf", b"invalid")})
+        assert invalid.status_code == 422
+        assert invalid.json()["detail"]["code"] == "PDF_INVALID"

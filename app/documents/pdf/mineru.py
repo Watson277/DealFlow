@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from html.parser import HTMLParser
 from io import BytesIO
@@ -17,6 +17,7 @@ import pymupdf
 from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError
 from app.documents.pdf.config import PDFParsingConfig
+from app.documents.pdf.errors import PDFPreflightCode, PDFPreflightError
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -29,12 +30,23 @@ from app.documents.pdf.models import (
     PDFPageType,
     PDFParseStatus,
 )
-from app.documents.pdf.native import NativePDFDocument
-from app.documents.pdf.preflight import PDFPreflightValidator
+from app.documents.pdf.preflight import PDFPreflightResult, PDFPreflightValidator
 from app.documents.pdf.quality import PageQualityDetector
 
 API = "https://mineru.net/api/v4"
 MAX_ARCHIVE_BYTES = 256 * 1024**2
+
+
+@dataclass(frozen=True, slots=True)
+class PDFDocument:
+    text: str
+    page_count: int
+    document_type: PDFDocumentType
+    pages: tuple[PageIR, ...]
+    warnings: tuple[ParseWarning, ...]
+    preflight: PDFPreflightResult
+    parser_version: str
+    ir: DocumentIR
 
 
 class _TableText(HTMLParser):
@@ -110,7 +122,7 @@ def convert_layout(
     filename: str,
     document_id: UUID | str | None = None,
     config: PDFParsingConfig | None = None,
-) -> NativePDFDocument:
+) -> PDFDocument:
     """Convert preproc_blocks only; never consume MinerU's cross-page para_blocks."""
     config = config or PDFParsingConfig()
     pages = []
@@ -257,7 +269,7 @@ def convert_layout(
     text = "\n\n".join(
         b.table_markdown or b.text for p in pages for b in p.blocks if b.table_markdown or b.text
     )
-    return NativePDFDocument(
+    return PDFDocument(
         text=text,
         page_count=len(pages),
         document_type=doc_type,
@@ -270,20 +282,25 @@ def convert_layout(
 
 
 class MinerUPDFParser:
-    def __init__(self, settings: Settings, config: PDFParsingConfig):
+    def __init__(self, settings: Settings, config: PDFParsingConfig | None = None):
         self.settings = settings
-        self.config = config
+        self.config = config or PDFParsingConfig.from_settings(settings)
 
-    def parse(self, content: bytes, filename: str, document_id=None) -> NativePDFDocument:
-        token = self.settings.mineru_api_token.get_secret_value().strip()
-        if not token:
-            raise DocumentProcessingError("MINERU_API_TOKEN is required for PDF_BACKEND=mineru")
+    def parse(self, content: bytes, filename: str, document_id=None) -> PDFDocument:
         if len(content) > 200 * 1024**2:
             raise DocumentProcessingError("MinerU PDF exceeds 200 MiB")
-        with pymupdf.open(stream=content, filetype="pdf") as source:
-            PDFPreflightValidator(self.config).validate(
-                source, filename=filename, file_size_bytes=len(content)
-            )
+        try:
+            with pymupdf.open(stream=content, filetype="pdf") as source:
+                PDFPreflightValidator(self.config).validate(
+                    source, filename=filename, file_size_bytes=len(content)
+                )
+        except (pymupdf.FileDataError, pymupdf.EmptyFileError):
+            raise PDFPreflightError(
+                PDFPreflightCode.INVALID, "document is not a valid PDF"
+            ) from None
+        token = self.settings.mineru_api_token.get_secret_value().strip()
+        if not token:
+            raise DocumentProcessingError("MINERU_API_TOKEN is required for PDF parsing")
         try:
             layout, archive = self._extract(content, filename, token)
             parsed = convert_layout(layout, content, filename, document_id, self.config)
@@ -310,9 +327,7 @@ class MinerUPDFParser:
             return replace(parsed, ir=ir)
         except Exception as exc:
             # HTTP exceptions may contain signed URLs; never expose them to worker logs.
-            raise DocumentProcessingError(
-                f"MinerU parsing failed ({type(exc).__name__}); no native fallback"
-            ) from None
+            raise DocumentProcessingError(f"MinerU parsing failed ({type(exc).__name__})") from None
 
     def _extract(self, content, filename, token):
         with (

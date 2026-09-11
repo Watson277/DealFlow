@@ -1,71 +1,31 @@
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from docx import Document as DocxDocument
 
 from app.core.config import Settings
 from app.core.exceptions import DocumentProcessingError, UnsupportedDocumentError
-from app.documents.pdf import (
-    DocumentIR,
-    NativePDFDocument,
-    NativePDFParser,
-    OCRProvider,
-    PDFParsingConfig,
-)
-from app.documents.pdf.layout.detection import LayoutDetector
-from app.documents.pdf.layout.tsr import TableStructureRecognizer
-from app.documents.pdf.vision import (
-    OpenAICompatibleVisionProvider,
-    VisionProvider,
-)
-
-if TYPE_CHECKING:
-    from app.documents.pdf.mineru import MinerUPDFParser
+from app.documents.pdf.mineru import MinerUPDFParser, PDFDocument
+from app.documents.pdf.models import DocumentIR
 
 
 @dataclass(frozen=True, slots=True)
 class ParsedDocument:
     text: str
     page_count: int | None
-    pdf: NativePDFDocument | None = None
+    pdf: PDFDocument | None = None
     document_ir: DocumentIR | None = None
 
 
 class DocumentParser:
-    def __init__(
-        self,
-        pdf_config: PDFParsingConfig | None = None,
-        pdf_ocr_provider: OCRProvider | None = None,
-        pdf_layout_detector: LayoutDetector | None = None,
-        pdf_table_recognizer: TableStructureRecognizer | None = None,
-        pdf_vision_provider: VisionProvider | None = None,
-    ) -> None:
-        self.pdf_parser: NativePDFParser | MinerUPDFParser = NativePDFParser(
-            pdf_config,
-            pdf_ocr_provider,
-            pdf_layout_detector,
-            pdf_table_recognizer,
-            pdf_vision_provider,
-        )
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.pdf_parser = MinerUPDFParser(settings or Settings())
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "DocumentParser":
-        config = PDFParsingConfig.from_settings(settings)
-        if settings.pdf_backend == "mineru":
-            from app.documents.pdf.mineru import MinerUPDFParser
-
-            parser = cls(config)
-            parser.pdf_parser = MinerUPDFParser(settings, config)
-            return parser
-        if settings.pdf_vlm_enabled:
-            return cls(
-                config,
-                pdf_vision_provider=OpenAICompatibleVisionProvider(settings),
-            )
-        return cls(config)
+        return cls(settings)
 
     def parse(
         self,

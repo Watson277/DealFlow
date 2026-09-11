@@ -59,31 +59,11 @@ Swagger `/docs` 和 ReDoc `/redoc` 已关闭，业务界面不展示自动生成
 
 页面每 5 秒刷新（浏览器标签页隐藏时暂停）。审核和重试后的状态也会同步到当前详情页。
 
-## PDF 原生解析、OCR 与版面分析
+## PDF 解析
 
-PDF 进入后续工作流前会先完成文件预检，拒绝损坏、加密、无页面或超过
-`PDF_MAX_PAGES` 的文件。解析器使用 PyMuPDF 提取原生文本块、图片位置、字体信息和 bbox，
-并按页计算有效字符数、乱码率以及文本/图片覆盖率，得到 `text`、`scanned`、`mixed` 或
-`empty` 页面类型。结构化结果通过 `ParsedDocument.pdf` 提供，原有带页码标记的纯文本输出保持兼容。
-
-路由粒度严格是单页。`text` 页使用 PyMuPDF 原生文字、图片与 `find_tables`；`scanned` 和
-`mixed` 页先渲染，再通过 OpenCV Layout Detection 划分文字区、表格区和图片区。文字区调用
-Tesseract 区域 OCR，表格区使用网格 TSR 后逐单元格 OCR，图片区可选择调用兼容
-Chat Completions 的 VLM。VLM 默认关闭，只有显式设置 `PDF_VLM_ENABLED=true` 才会把检测出的
-图片裁剪发送到外部模型。相关参数位于 `.env` 的 `PDF_LAYOUT_DETECTION_*`、`PDF_OCR_*`、
-`PDF_TSR_*` 和 `PDF_VLM_*`。
-
-多通道结果先经过 Block Fusion，再生成 `PageIR`：通过 bbox、IoU 与文本相似度消除 Native/OCR
-重复，表格结构覆盖表格区域内的普通文字，冲突时优先保留 `native text > OCR`。之后共享版面
-分析器恢复多栏阅读顺序，并标记 `title`、`list`、`header`、`footer`、`footnote` 与
-`caption`。全部页面处理完成后，才汇总 `page_types[]` 得到 `DocumentIR.document_type`；每页实际
-路由和融合统计也会写入 IR metadata，便于排障和追溯。
-
-页提取支持受控多进程并行。达到 `PDF_PAGE_PARALLEL_MIN_PAGES` 后，页面按轮询方式分配给最多
-`PDF_PAGE_WORKERS` 个进程；每个进程独立打开 PDF，避免跨线程共享 PyMuPDF 对象。页面即使乱序
-完成，也会在父进程中按 `page_number` 排序后再执行文档级版面分析。短文档、自定义 Provider、
-启用 VLM 或进程池异常时自动使用串行路径。并行状态和降级原因记录在
-`DocumentIR.metadata.page_extraction`。
+PDF 统一通过 MinerU 云服务解析，使用逐页 `preproc_blocks` 转成 DocumentIR。
+本地 PyMuPDF 仅用于文件预检、页面尺寸和页类型诊断，不再负责正文、OCR 或表格提取。
+所有 PDF 都会上传至 MinerU，需要配置 `MINERU_API_TOKEN`；没有原生回退路径。
 
 ### 本地 PDF 解析测试接口
 
@@ -250,19 +230,17 @@ docker compose down
 如需同时删除 MySQL、Kafka、MinIO、Qdrant 和 Redis 的本地数据卷，可执行
 `docker compose down -v`。该命令会永久删除本地项目数据。
 
-## 可选 MinerU PDF 后端
+## MinerU PDF 解析
 
-原有 PyMuPDF/Tesseract 解析方案及 DocumentIR v1.0 保持不变，默认
-`PDF_BACKEND=native`。如需将 PDF 上传至 MinerU 云服务，在 `.env` 设置：
+PDF 统一使用 MinerU 云服务，输出仍是 DocumentIR v1.0。在 `.env` 设置：
 
 ```dotenv
-PDF_BACKEND=mineru
 MINERU_API_TOKEN=你的Token
 MINERU_MODEL=vlm
 MINERU_WAIT_SECONDS=1800
 ```
 
-该开关同时适用于 RFP、企业知识库及 `/dev/pdf/parse`；DOCX/Markdown 不受影响。
+该方案同时适用于 RFP、企业知识库及 `/dev/pdf/parse`；DOCX/Markdown 不受影响。
 转换使用 `layout.json` 的逐页 `preproc_blocks`，不采用可能错误跨页合并的
 `para_blocks` 或 `full.md`。保留页码、缩放到源页面尺寸的 bbox、原始块和表格 HTML；
 简单表格生成 Markdown，含合并单元格的复杂表格保留嵌入 HTML。
@@ -270,7 +248,7 @@ MINERU_WAIT_SECONDS=1800
 DocumentIR metadata 记录本地归档位置；图片路径是 ZIP 内引用，不是可公开访问的 URL。
 这些原始 ZIP 尚未单独上传 MinIO，也不随知识库删除自动清理。
 
-远程解析失败会报错，不会静默切换原生后端。切回 `PDF_BACKEND=native` 可恢复原流程。
+远程解析失败会明确报错，原生解析后端已移除；旧 `PDF_BACKEND` 配置不再生效。
 云服务输出仍可能存在错字；本适配器并不修复 OCR 错字，也不自动拼接跨页续表。
 
 容器部署需更新应用镜像并重新创建相关服务（无需重建 web 或数据库）：
@@ -280,4 +258,4 @@ docker compose build api
 docker compose up -d --force-recreate api rfp-worker knowledge-worker
 ```
 
-本地回归测试：`uv run pytest tests/test_mineru_backend.py tests/documents/pdf -q`。
+本地回归测试：`uv run pytest tests/test_mineru_backend.py tests/documents/pdf/test_models.py -q`。

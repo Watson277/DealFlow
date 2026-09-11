@@ -132,12 +132,8 @@ class PageQualityDetector:
         if garbled_ratio > self.config.max_garbled_ratio:
             return PDFPageType.SCANNED, True
 
-        if (
-            effective_char_count < self.config.min_effective_chars
-            and (
-                image_coverage >= self.config.scanned_image_coverage_threshold
-                or has_significant_image
-            )
+        if effective_char_count < self.config.min_effective_chars and (
+            image_coverage >= self.config.scanned_image_coverage_threshold or has_significant_image
         ):
             return PDFPageType.SCANNED, True
 

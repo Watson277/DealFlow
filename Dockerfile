@@ -1,8 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.8.17-python3.11-bookworm-slim
 
-ARG DEBIAN_MIRROR=http://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
@@ -11,20 +8,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 WORKDIR /app
-
-RUN --mount=type=cache,id=dealflow-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=dealflow-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
-    && sed -i \
-        -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-        -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update \
-    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install \
-        --yes --no-install-recommends \
-        tesseract-ocr \
-        tesseract-ocr-chi-sim \
-        tesseract-ocr-eng
 
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,id=dealflow-uv,target=/root/.cache/uv,sharing=locked \

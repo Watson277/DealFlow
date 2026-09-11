@@ -1,26 +1,5 @@
-"""PDF parsing intermediate representation."""
+"""Shared DocumentIR contracts and persistence helpers."""
 
-from app.documents.pdf.config import PDFParsingConfig
-from app.documents.pdf.errors import (
-    PDFOCRError,
-    PDFOCRErrorCode,
-    PDFPreflightCode,
-    PDFPreflightError,
-    PDFTableRecognitionError,
-    PDFVisionError,
-)
-from app.documents.pdf.fusion import BlockFusion, BlockFusionResult
-from app.documents.pdf.layout import (
-    LayoutDetectionResult,
-    LayoutDetector,
-    LayoutRegion,
-    LayoutRegionType,
-    OpenCVLayoutDetector,
-    OpenCVTableStructureRecognizer,
-    ScannedTableResult,
-    TableStructureRecognizer,
-)
-from app.documents.pdf.layout.analyzer import PDFLayoutAnalyzer
 from app.documents.pdf.models import (
     BlockIR,
     BoundingBox,
@@ -34,68 +13,27 @@ from app.documents.pdf.models import (
     PDFParseStatus,
     PDFWarningSeverity,
 )
-from app.documents.pdf.native import NativePDFDocument, NativePDFParser
-from app.documents.pdf.ocr import OCRBlock, OCRPageResult, OCRProvider, TesseractOCRProvider
-from app.documents.pdf.preflight import PDFPreflightResult
-from app.documents.pdf.quality import PageQuality, PageQualityDetector
 from app.documents.pdf.serialization import (
     DOCUMENT_IR_CONTENT_TYPE,
     DOCUMENT_IR_FILENAME,
     document_ir_object_key,
     serialize_document_ir,
 )
-from app.documents.pdf.vision import (
-    DisabledVisionProvider,
-    OpenAICompatibleVisionProvider,
-    VisionProvider,
-    VisionRegionResult,
-)
 
 __all__ = [
     "BlockIR",
-    "BlockFusion",
-    "BlockFusionResult",
     "BoundingBox",
     "DocumentIR",
-    "DOCUMENT_IR_CONTENT_TYPE",
-    "DOCUMENT_IR_FILENAME",
-    "NativePDFDocument",
-    "NativePDFParser",
-    "LayoutDetectionResult",
-    "LayoutDetector",
-    "LayoutRegion",
-    "LayoutRegionType",
-    "OCRBlock",
-    "OCRPageResult",
-    "OCRProvider",
+    "PageIR",
+    "ParseWarning",
     "PDFBlockSource",
     "PDFBlockType",
     "PDFDocumentType",
     "PDFPageType",
-    "PDFOCRError",
-    "PDFOCRErrorCode",
-    "PDFTableRecognitionError",
-    "PDFVisionError",
     "PDFParseStatus",
-    "PDFLayoutAnalyzer",
-    "PDFParsingConfig",
-    "PDFPreflightCode",
-    "PDFPreflightError",
-    "PDFPreflightResult",
     "PDFWarningSeverity",
-    "PageIR",
-    "PageQuality",
-    "PageQualityDetector",
-    "ParseWarning",
-    "OpenCVLayoutDetector",
-    "OpenCVTableStructureRecognizer",
-    "OpenAICompatibleVisionProvider",
-    "DisabledVisionProvider",
-    "ScannedTableResult",
-    "TableStructureRecognizer",
-    "TesseractOCRProvider",
-    "VisionProvider",
-    "VisionRegionResult",
+    "DOCUMENT_IR_CONTENT_TYPE",
+    "DOCUMENT_IR_FILENAME",
     "document_ir_object_key",
     "serialize_document_ir",
 ]
