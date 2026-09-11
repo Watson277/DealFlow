@@ -101,7 +101,8 @@ def main() -> None:
     run_dir.mkdir(parents=True)
     started = time.monotonic()
     # Authorization belongs only to MinerU API calls, never signed storage URLs.
-    with httpx.Client(timeout=120, follow_redirects=True) as storage:
+    # The storage client also handles the download after the API client closes.
+    with httpx.Client(timeout=120, follow_redirects=True) as storage:  # noqa: SIM117
         with httpx.Client(timeout=60, follow_redirects=False) as client:
             batch_id = args.batch_id
             if not batch_id:
