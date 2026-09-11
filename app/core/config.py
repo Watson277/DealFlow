@@ -79,6 +79,10 @@ class Settings(BaseSettings):
         min_length=1,
         max_length=64,
     )
+    pdf_backend: Literal["native", "mineru"] = "native"
+    mineru_api_token: SecretStr = SecretStr("")
+    mineru_model: Literal["vlm", "pipeline"] = "vlm"
+    mineru_wait_seconds: float = Field(default=1800, gt=0, le=7200)
     pdf_max_pages: int = Field(default=500, ge=1, le=10_000)
     pdf_text_min_effective_chars: int = Field(default=20, ge=1)
     pdf_text_max_garbled_ratio: float = Field(default=0.10, ge=0.0, le=1.0)

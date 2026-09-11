@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from docx import Document as DocxDocument
@@ -21,6 +22,9 @@ from app.documents.pdf.vision import (
     VisionProvider,
 )
 
+if TYPE_CHECKING:
+    from app.documents.pdf.mineru import MinerUPDFParser
+
 
 @dataclass(frozen=True, slots=True)
 class ParsedDocument:
@@ -39,7 +43,7 @@ class DocumentParser:
         pdf_table_recognizer: TableStructureRecognizer | None = None,
         pdf_vision_provider: VisionProvider | None = None,
     ) -> None:
-        self.pdf_parser = NativePDFParser(
+        self.pdf_parser: NativePDFParser | MinerUPDFParser = NativePDFParser(
             pdf_config,
             pdf_ocr_provider,
             pdf_layout_detector,
@@ -50,6 +54,12 @@ class DocumentParser:
     @classmethod
     def from_settings(cls, settings: Settings) -> "DocumentParser":
         config = PDFParsingConfig.from_settings(settings)
+        if settings.pdf_backend == "mineru":
+            from app.documents.pdf.mineru import MinerUPDFParser
+
+            parser = cls(config)
+            parser.pdf_parser = MinerUPDFParser(settings, config)
+            return parser
         if settings.pdf_vlm_enabled:
             return cls(
                 config,
@@ -72,9 +82,7 @@ class DocumentParser:
             elif extension in {".md", ".markdown"}:
                 parsed = self._parse_markdown(content)
             else:
-                raise UnsupportedDocumentError(
-                    "only PDF, DOCX, and Markdown files are supported"
-                )
+                raise UnsupportedDocumentError("only PDF, DOCX, and Markdown files are supported")
         except (UnsupportedDocumentError, DocumentProcessingError):
             raise
         except Exception as exc:

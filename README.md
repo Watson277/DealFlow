@@ -249,3 +249,35 @@ docker compose down
 
 如需同时删除 MySQL、Kafka、MinIO、Qdrant 和 Redis 的本地数据卷，可执行
 `docker compose down -v`。该命令会永久删除本地项目数据。
+
+## 可选 MinerU PDF 后端
+
+原有 PyMuPDF/Tesseract 解析方案及 DocumentIR v1.0 保持不变，默认
+`PDF_BACKEND=native`。如需将 PDF 上传至 MinerU 云服务，在 `.env` 设置：
+
+```dotenv
+PDF_BACKEND=mineru
+MINERU_API_TOKEN=你的Token
+MINERU_MODEL=vlm
+MINERU_WAIT_SECONDS=1800
+```
+
+该开关同时适用于 RFP、企业知识库及 `/dev/pdf/parse`；DOCX/Markdown 不受影响。
+转换使用 `layout.json` 的逐页 `preproc_blocks`，不采用可能错误跨页合并的
+`para_blocks` 或 `full.md`。保留页码、缩放到源页面尺寸的 bbox、原始块和表格 HTML；
+简单表格生成 Markdown，含合并单元格的复杂表格保留嵌入 HTML。
+原始图片与 JSON ZIP 保存于 `LOCAL_ARTIFACT_EXPORT_DIR/mineru/<document-id>/<run>/result.zip`，
+DocumentIR metadata 记录本地归档位置；图片路径是 ZIP 内引用，不是可公开访问的 URL。
+这些原始 ZIP 尚未单独上传 MinIO，也不随知识库删除自动清理。
+
+远程解析失败会报错，不会静默切换原生后端。切回 `PDF_BACKEND=native` 可恢复原流程。
+云服务输出仍可能存在错字；本适配器并不修复 OCR 错字，也不自动拼接跨页续表。
+
+容器部署需更新应用镜像并重新创建相关服务（无需重建 web 或数据库）：
+
+```powershell
+docker compose build api
+docker compose up -d --force-recreate api rfp-worker knowledge-worker
+```
+
+本地回归测试：`uv run pytest tests/test_mineru_backend.py tests/documents/pdf -q`。
