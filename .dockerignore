@@ -12,7 +12,16 @@
 build
 dist
 docs
+evals
 htmlcov
+test-data
 tests
+report*.zip
+scripts/probe_mineru.py
+docker-compose.rag-eval.yml
+app/rag/evaluate_cli.py
+app/rag/evaluation.py
+app/rag/evaluation_corpus.py
+app/rag/evaluation_report.py
 *.egg-info
 .coverage

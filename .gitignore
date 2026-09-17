@@ -22,3 +22,13 @@ data/processed-documents/
 data/mineru-probe/
 docs/
 tests/
+evals/
+test-data/
+report*.zip
+scripts/probe_mineru.py
+docker-compose.rag-eval.yml
+app/rag/evaluate_cli.py
+app/rag/evaluation.py
+app/rag/evaluation_corpus.py
+app/rag/evaluation_report.py
+web/playwright.config.ts

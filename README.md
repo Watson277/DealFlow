@@ -1,6 +1,6 @@
 # DealFlow RFP Agent
 
-DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP 处理练手项目。
+DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP 处理系统。
 
 ## 使用 Docker Compose 启动
 
@@ -196,18 +196,13 @@ RFP 状态接口仍只显示简短错误摘要；详细字段错误请查看对�
 
 已有失败任务不会因升级自动重试。更新容器后，在工作台打开该 RFP 并点击重试，即可使用新逻辑。
 
-## 本地前端开发与测试
+## 本地前端开发
 
 前端源代码位于 `web/src`，使用 React + TypeScript + Vite。Node 要求 20.19+ 或 22.12+。
 在 `web` 目录执行 `npm ci`、`npm run dev`，开发代理会连接本机 8000 端口的 API。
 如果容器 Web 已占用 3000，可用 `npm run dev -- --port 3001`。
 
 - `npm run build`：TypeScript 检查与生产构建。
-- `npm test`：浏览器交互测试，接口响应仅在测试中拦截，不访问真实 LLM、不写入业务数据。
-  Windows 使用本机 Edge；其他系统先运行 `npx playwright install chromium`。
-- 根目录 `uv run pytest -q -m "not integration"`：不依赖基础设施的后端测试。
-- 设置 `RUN_INTEGRATION_TESTS=1` 后执行 `uv run pytest -q tests/integration/test_rfp_retry.py`：
-  使用本机 MySQL 验证重试与恢复，仅清理该测试创建的记录，不发出 Kafka/LLM 请求。
 
 当前没有身份验证，仅用于可信的个人开发环境，请勿直接暴露到公网。
 
@@ -257,5 +252,3 @@ DocumentIR metadata 记录本地归档位置；图片路径是 ZIP 内引用，�
 docker compose build api
 docker compose up -d --force-recreate api rfp-worker knowledge-worker
 ```
-
-本地回归测试：`uv run pytest tests/test_mineru_backend.py tests/documents/pdf/test_models.py -q`。

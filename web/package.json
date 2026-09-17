@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite --config vite.config.ts --host 127.0.0.1",
     "build": "tsc -b && vite build --config vite.config.ts",
-    "preview": "vite preview --config vite.config.ts --host 127.0.0.1",
-    "test": "playwright test"
+    "preview": "vite preview --config vite.config.ts --host 127.0.0.1"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",
@@ -20,7 +19,6 @@
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5"
   }
