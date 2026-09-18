@@ -3,8 +3,12 @@
 The generator processes capability results sequentially in batches (default 8,
 configured through `PROPOSAL_BATCH_SIZE`, range 1–10). Each batch returns only
 requirement keys, responses, evidence summaries and risks. Source requirement text
-and capability status are restored locally. Missing, unknown or duplicate keys
-fail generation before a proposal is saved.
+and capability status are restored locally. The prompt explicitly enumerates the
+exact source keys. Missing, unknown or duplicate keys trigger one corrective
+regeneration of the complete batch with coverage diagnostics. If correction fails,
+the batch is halved recursively. A singleton gets at most one coverage correction;
+continued mismatch fails before sections or a proposal are saved. Responses are
+never assigned to different keys or silently dropped to pass validation.
 
 After all batches succeed, a separate call generates the overall proposal
 sections from the compact responses, without raw evidence snippets. Python merges
@@ -18,7 +22,8 @@ accepted or fed into the generic schema repair loop. Other schema errors retain
 the existing one-repair limit and transport retry budget.
 
 Logs `proposal_batch_completed` report completed/total requirements;
-`proposal_batch_split` reports automatic subdivision. The stage remains
+`proposal_batch_coverage_failed` reports missing, unknown and duplicate keys;
+`proposal_batch_split` reports automatic subdivision and its reason. The stage remains
 `generate_proposal` until all validation, rendering and persistence succeed.
 
 Successful batches are held in memory for this generation attempt. They are not

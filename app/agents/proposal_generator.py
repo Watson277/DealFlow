@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from typing import Protocol
 
 import structlog
@@ -107,7 +108,9 @@ class OpenAIProposalGenerator:
         self,
         context: ProposalContext,
         capabilities: list[dict[str, object]],
+        correction: str = "",
     ) -> list[ProposalRequirementResponse]:
+        expected = {str(item["requirement_key"]): item for item in capabilities}
         try:
             batch = await self.client.complete(
                 instructions=(
@@ -116,6 +119,11 @@ class OpenAIProposalGenerator:
                     "requirement text or capability_status in the output; the application "
                     "will restore them. Keep responses concise. Retain numeric constraints, "
                     "SLA, deployment conditions and evidence limitations. Respect field lengths."
+                    "\nThe exact required keys for this batch are: "
+                    + json.dumps(list(expected), ensure_ascii=False)
+                    + ". Copy these keys literally, each exactly once. Do not renumber, "
+                    "merge similar requirements, or add keys from evidence documents."
+                    + correction
                 ),
                 user_input=context.model_copy(
                     update={"capabilities": capabilities}
@@ -128,20 +136,42 @@ class OpenAIProposalGenerator:
         except LLMOutputTruncatedError:
             if len(capabilities) == 1:
                 raise
-            middle = len(capabilities) // 2
+            return await self._split_batch(context, capabilities, reason="truncated")
+        actual = [item.requirement_key for item in batch.requirement_responses]
+        counts = Counter(actual)
+        missing = sorted(set(expected) - set(actual))
+        unknown = sorted(set(actual) - set(expected))
+        duplicates = sorted(key for key, count in counts.items() if count > 1)
+        if missing or unknown or duplicates:
             logger.warning(
-                "proposal_batch_split",
+                "proposal_batch_coverage_failed",
                 rfp_id=context.rfp.get("id"),
                 requirement_count=len(capabilities),
+                missing_keys=missing,
+                unknown_keys=unknown,
+                duplicate_keys=duplicates,
+                correction_attempt=bool(correction),
             )
-            left = await self._generate_batch(context, capabilities[:middle])
-            right = await self._generate_batch(context, capabilities[middle:])
-            return left + right
-        expected = {str(item["requirement_key"]): item for item in capabilities}
-        actual = [item.requirement_key for item in batch.requirement_responses]
-        if len(actual) != len(set(actual)) or set(actual) != set(expected):
+            if not correction:
+                return await self._generate_batch(
+                    context,
+                    capabilities,
+                    correction=(
+                        "\nThe previous attempt had invalid requirement coverage: "
+                        + json.dumps(
+                            {"missing": missing, "unknown": unknown, "duplicates": duplicates},
+                            ensure_ascii=False,
+                        )
+                        + ". Regenerate the complete batch from the supplied source data, "
+                        "not just the missing items. Match each response to its source key."
+                    ),
+                )
+            if len(capabilities) > 1:
+                return await self._split_batch(context, capabilities, reason="coverage")
             raise ProposalGenerationError(
-                "proposal batch must contain every supplied requirement exactly once"
+                "proposal batch must contain every supplied requirement exactly once; "
+                f"coverage repair exhausted for {next(iter(expected))} "
+                f"(missing={len(missing)}, unknown={len(unknown)}, duplicates={len(duplicates)})"
             )
         by_key = {item.requirement_key: item for item in batch.requirement_responses}
         return [
@@ -154,3 +184,21 @@ class OpenAIProposalGenerator:
             )
             for key, source in expected.items()
         ]
+
+    async def _split_batch(
+        self,
+        context: ProposalContext,
+        capabilities: list[dict[str, object]],
+        *,
+        reason: str,
+    ) -> list[ProposalRequirementResponse]:
+        logger.warning(
+            "proposal_batch_split",
+            rfp_id=context.rfp.get("id"),
+            requirement_count=len(capabilities),
+            reason=reason,
+        )
+        middle = len(capabilities) // 2
+        left = await self._generate_batch(context, capabilities[:middle])
+        right = await self._generate_batch(context, capabilities[middle:])
+        return left + right
