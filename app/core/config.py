@@ -143,6 +143,7 @@ class Settings(BaseSettings):
     capability_reranker_knowledge_max_tokens: int = Field(default=512, ge=64, le=8_192)
     capability_reranker_fallback_enabled: bool = True
     proposal_max_output_tokens: int = 12_000
+    proposal_batch_size: int = Field(default=8, ge=1, le=10)
     proposal_evidence_max_chars: int = 1_200
     proposal_lock_ttl_seconds: int = 1_800
     proposal_prompt_version: str = "proposal-v1"

@@ -177,8 +177,11 @@ class ProposalProcessingService:
                     ),
                 }
                 for item in sorted(
-                    result.evidence_items,
-                    key=lambda evidence_item: evidence_item.rank_position,
+                    [item for item in result.evidence_items if item.is_selected]
+                    or result.evidence_items,
+                    key=lambda evidence_item: (
+                        evidence_item.selection_order or evidence_item.rank_position
+                    ),
                 )[:3]
             ]
             capabilities.append(

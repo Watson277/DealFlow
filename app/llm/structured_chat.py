@@ -16,6 +16,10 @@ StructuredModelT = TypeVar("StructuredModelT", bound=BaseModel)
 logger = structlog.get_logger(__name__)
 
 
+class LLMOutputTruncatedError(Exception):
+    """Provider exhausted the output budget before completing the response."""
+
+
 def llm_error_summary(exc: Exception) -> str:
     """Keep provider bodies, prompts, and validation input out of logs and status."""
     if isinstance(exc, APITimeoutError):
@@ -26,6 +30,8 @@ def llm_error_summary(exc: Exception) -> str:
         return f"LLM provider returned HTTP {exc.status_code}"
     if isinstance(exc, ValidationError):
         return f"LLM output did not match the schema ({exc.error_count()} errors)"
+    if isinstance(exc, LLMOutputTruncatedError):
+        return "LLM output was truncated at the output token limit"
     return f"LLM completion failed ({type(exc).__name__})"
 
 
@@ -97,6 +103,8 @@ class StructuredChatClient:
                 if not response.choices:
                     raise ValueError("LLM returned no completion choices")
                 content = response.choices[0].message.content or ""
+                if response.choices[0].finish_reason == "length":
+                    raise LLMOutputTruncatedError()
                 if not content:
                     raise ValueError("LLM returned an empty completion")
                 result = output_model.model_validate_json(content)

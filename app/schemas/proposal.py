@@ -16,18 +16,36 @@ class ProposalRequirementResponse(BaseModel):
     risk_or_gap: str | None = None
 
 
-class ProposalDraft(BaseModel):
+class ProposalSections(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=255)
     executive_summary: str = Field(min_length=1)
-    requirement_responses: list[ProposalRequirementResponse]
     technical_solution: str = Field(min_length=1)
     security_compliance: str = Field(min_length=1)
     sla: str = Field(min_length=1)
     deployment: str = Field(min_length=1)
     risks_and_gaps: str = Field(min_length=1)
     commercial_notes: str = Field(min_length=1)
+
+
+class ProposalDraft(ProposalSections):
+    requirement_responses: list[ProposalRequirementResponse]
+
+
+class ProposalBatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requirement_key: str = Field(min_length=1, max_length=32)
+    response: str = Field(min_length=1, max_length=800)
+    evidence_summary: str = Field(min_length=1, max_length=400)
+    risk_or_gap: str | None = Field(default=None, max_length=600)
+
+
+class ProposalBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requirement_responses: list[ProposalBatchItem]
 
 
 class ProposalResponse(BaseModel):
