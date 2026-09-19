@@ -22,7 +22,7 @@ data/processed-documents/
 data/mineru-probe/
 docs/
 # Tests are local-only. Never force-add or commit files under tests/.
-/tests/
+tests/
 evals/
 test-data/
 report*.zip
