@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     requirement_chunk_size_chars: int = 60_000
     requirement_max_chunks: int = 20
     requirement_max_output_tokens: int = 12_000
-    requirement_lock_ttl_seconds: int = 1_800
+    requirement_lock_ttl_seconds: int = 120
     requirement_worker_processes: int = Field(default=3, ge=1, le=32)
     requirement_worker_shutdown_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
     requirement_worker_task_timeout_seconds: float = Field(default=1800.0, gt=0, le=86400)
