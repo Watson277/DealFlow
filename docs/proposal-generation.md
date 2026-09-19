@@ -1,5 +1,12 @@
 # Proposal generation
 
+Generated narrative fields use Simplified Chinese, including batch responses,
+evidence summaries, risks and overview sections. Prompts preserve technical names,
+numbers, JSON keys and requirement identifiers. Markdown headings, column labels
+and capability display labels are Chinese; stored capability enum values are
+unchanged. This does not translate already saved drafts or Markdown objects:
+existing proposals must be regenerated through the review/revision workflow.
+
 The generator processes capability results sequentially in batches (default 8,
 configured through `PROPOSAL_BATCH_SIZE`, range 1–10). Each batch returns only
 requirement keys, responses, evidence summaries and risks. Source requirement text

@@ -54,6 +54,8 @@ def generator(monkeypatch, complete):
 async def test_42_requirements_merged_in_source_order_without_resending_evidence(monkeypatch):
     async def complete(**kwargs):
         payload = json.loads(kwargs["user_input"])
+        assert "Simplified Chinese" in kwargs["instructions"]
+        assert "Keep JSON field names, requirement_key identifiers" in kwargs["instructions"]
         assert payload["rfp"]["review_feedback"] == "keep gaps"
         if kwargs["output_model"] is ProposalBatch:
             assert len(payload["capabilities"]) <= 8
@@ -113,6 +115,7 @@ async def test_coverage_correction_recovers_without_splitting(monkeypatch, mode)
 
     async def complete(**kwargs):
         nonlocal attempts
+        assert "Simplified Chinese" in kwargs["instructions"]
         if kwargs["output_model"] is ProposalSections:
             return sections()
         items = json.loads(kwargs["user_input"])["capabilities"]

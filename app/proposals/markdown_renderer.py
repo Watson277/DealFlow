@@ -1,4 +1,14 @@
+from app.models.enums import CapabilityStatus
 from app.schemas.proposal import ProposalDraft
+
+CAPABILITY_LABELS = {
+    CapabilityStatus.SUPPORTED: "支持",
+    CapabilityStatus.PARTIALLY_SUPPORTED: "部分支持",
+    CapabilityStatus.UNSUPPORTED: "不支持",
+    CapabilityStatus.ENTERPRISE_ONLY: "仅企业版支持",
+    CapabilityStatus.REQUIRES_CUSTOMIZATION: "需要定制",
+    CapabilityStatus.NEED_REVIEW: "待确认",
+}
 
 
 class ProposalMarkdownRenderer:
@@ -6,13 +16,13 @@ class ProposalMarkdownRenderer:
         lines = [
             f"# {draft.title}",
             "",
-            "## Executive Summary",
+            "## 方案摘要",
             "",
             draft.executive_summary.strip(),
             "",
-            "## Requirement Response Matrix",
+            "## 需求响应矩阵",
             "",
-            "| Requirement | Status | Response | Evidence | Risk / Gap |",
+            "| 需求 | 支持情况 | 回复 | 证据摘要 | 风险与差距 |",
             "|---|---|---|---|---|",
         ]
         for item in draft.requirement_responses:
@@ -21,10 +31,10 @@ class ProposalMarkdownRenderer:
                 + " | ".join(
                     [
                         self._cell(f"{item.requirement_key}: {item.requirement}"),
-                        self._cell(item.capability_status.value),
+                        self._cell(CAPABILITY_LABELS[item.capability_status]),
                         self._cell(item.response),
                         self._cell(item.evidence_summary),
-                        self._cell(item.risk_or_gap or "None identified"),
+                        self._cell(item.risk_or_gap or "未识别出风险或差距"),
                     ]
                 )
                 + " |"
@@ -32,27 +42,27 @@ class ProposalMarkdownRenderer:
         lines.extend(
             [
                 "",
-                "## Technical Solution",
+                "## 技术方案",
                 "",
                 draft.technical_solution.strip(),
                 "",
-                "## Security & Compliance",
+                "## 安全与合规",
                 "",
                 draft.security_compliance.strip(),
                 "",
-                "## Service Levels",
+                "## 服务级别",
                 "",
                 draft.sla.strip(),
                 "",
-                "## Deployment",
+                "## 部署方案",
                 "",
                 draft.deployment.strip(),
                 "",
-                "## Risks & Gaps",
+                "## 风险与差距",
                 "",
                 draft.risks_and_gaps.strip(),
                 "",
-                "## Commercial Notes",
+                "## 商务说明",
                 "",
                 draft.commercial_notes.strip(),
                 "",
