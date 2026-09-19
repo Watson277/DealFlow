@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -63,14 +64,25 @@ class RequirementProcessingService:
             rfp, document, workflow_run = entities
 
             try:
-                parsed_text = (
-                    await self.storage.download(document.bucket, event.parsed_text_object_key)
-                ).decode("utf-8")
-                extracted = await self.extractor.extract(
-                    parsed_text,
-                    rfp_id=rfp.id,
-                    title=rfp.title,
-                )
+                try:
+                    async with asyncio.timeout(
+                        self.settings.requirement_worker_task_timeout_seconds
+                    ):
+                        parsed_text = (
+                            await self.storage.download(
+                                document.bucket, event.parsed_text_object_key
+                            )
+                        ).decode("utf-8")
+                        extracted = await self.extractor.extract(
+                            parsed_text,
+                            rfp_id=rfp.id,
+                            title=rfp.title,
+                        )
+                except TimeoutError as exc:
+                    raise RequirementExtractionError(
+                        "requirement extraction exceeded "
+                        f"{self.settings.requirement_worker_task_timeout_seconds:g} seconds"
+                    ) from exc
                 completion_event = await self._save_requirements(
                     session,
                     event,

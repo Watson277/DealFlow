@@ -325,6 +325,9 @@ services:
   requirement-worker:
     <<: *app-service
     container_name: dealflow-requirement-worker
+    init: true
+    # Must exceed the worker shutdown timeout plus 30 seconds for cleanup/reaping.
+    stop_grace_period: ${REQUIREMENT_WORKER_STOP_GRACE_PERIOD:-150s}
     command:
       - /bin/sh
       - -c
@@ -333,7 +336,7 @@ services:
           echo 'LLM_API_KEY or ZAI_API_KEY is not configured; requirement-worker is disabled.';
           exit 0;
         fi;
-        exec python -m app.workers.requirement_worker
+        exec python -m app.workers.requirement_pool
     depends_on: *app-dependencies
     restart: on-failure
 

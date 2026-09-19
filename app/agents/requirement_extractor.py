@@ -47,6 +47,9 @@ class OpenAIRequirementExtractor:
         self.settings = settings
         self.client = StructuredChatClient(settings)
 
+    async def aclose(self) -> None:
+        await self.client.client.close()
+
     async def extract(
         self,
         document_text: str,
