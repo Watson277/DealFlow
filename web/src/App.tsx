@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
+import { EvidenceCard } from "./EvidenceCard";
 import { FileDropField } from "./FileDropField";
 import { MarkdownPreview } from "./MarkdownPreview";
 import type {
@@ -874,9 +875,9 @@ function RFPDetail({
                   <em>{item.evidence.length} 条证据</em>
                   {item.evidence.length > 0 && (
                     <details className="evidence">
-                      <summary>查看证据片段</summary>
-                      {item.evidence.map((entry, index) => (
-                        <blockquote key={index}>{entry.snippet}</blockquote>
+                      <summary>查看证据与来源位置</summary>
+                      {item.evidence.map((entry) => (
+                        <EvidenceCard key={entry.id} evidence={entry} />
                       ))}
                     </details>
                   )}

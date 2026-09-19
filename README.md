@@ -10,10 +10,11 @@ DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP �
    Copy-Item .env.example .env
    ```
 
-2. 在 `.env` 中填写智谱 API Key：
+2. 在 `.env` 中填写智谱与 MinerU API Key：
 
    ```dotenv
    LLM_API_KEY=你的智谱_API_Key
+   MINERU_API_TOKEN=你的_MinerU_API_Token
    ```
 
    默认配置通过智谱的 OpenAI-compatible Chat Completions API 调用
@@ -21,8 +22,10 @@ DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP �
    `ZAI_API_KEY` 作为密钥变量名；`OPENAI_API_KEY` 仅作为旧配置的兼容别名。
    基础设施密码仅用于本地开发时可以保留默认值。
 
-   未配置密钥时，API 与 RFP 文件解析 Worker 仍可启动；需求抽取、能力判断和 Proposal
-   Worker 会输出说明后停止，以避免无意义的重启循环。
+   未配置 `LLM_API_KEY` 时，API 与 RFP 文件解析 Worker 仍可启动；知识库、需求抽取、
+   能力判断和 Proposal Worker 会输出说明后停止，以避免无意义的重启循环。
+   未配置 `MINERU_API_TOKEN` 时，PDF 类型的 RFP、知识库上传及本地 PDF 解析测试会失败；
+   DOCX、Markdown 和纯文本处理不受影响。
 
    从原先 1536 维向量配置升级时，默认 Qdrant collection 会切换到
    `dealflow_knowledge_glm`。旧 collection 不会被删除，但企业知识文档需要重新上传索引。
@@ -63,7 +66,8 @@ Swagger `/docs` 和 ReDoc `/redoc` 已关闭，业务界面不展示自动生成
 
 PDF 统一通过 MinerU 云服务解析，使用逐页 `preproc_blocks` 转成 DocumentIR。
 本地 PyMuPDF 仅用于文件预检、页面尺寸和页类型诊断，不再负责正文、OCR 或表格提取。
-所有 PDF 都会上传至 MinerU，需要配置 `MINERU_API_TOKEN`；没有原生回退路径。
+所有 PDF 都会上传至 MinerU，需要配置 `MINERU_API_TOKEN`；没有原生回退路径。由于 PDF
+原文会离开本机并上传至 MinerU，接入真实企业文档前应先完成数据合规与敏感信息评估。
 
 ### 本地 PDF 解析测试接口
 
@@ -71,7 +75,7 @@ PDF 统一通过 MinerU 云服务解析，使用逐页 `preproc_blocks` 转成 D
 运行与 RFP、企业知识库相同的统一解析器，并下载一个 ZIP，内含：
 
 - `*.document-ir.json`：完整 DocumentIR；
-- `*.parsed.md`：按页组织的可读解析文本和表格 Markdown；
+- `*.parsed.md`：按 MinerU 页序和 Block 阅读顺序展开的解析文本与表格 Markdown；
 - `*.summary.json`：页面类型、实际路由、Block 数量和告警数量摘要。
 
 PowerShell 测试命令：
@@ -83,7 +87,8 @@ curl.exe -X POST "http://localhost:8000/dev/pdf/parse" `
 ```
 
 接口仅在 `APP_ENV=development/dev/local/test/testing` 时开放，其他环境返回 `404`。上传大小受
-`MAX_RFP_UPLOAD_SIZE_BYTES` 限制。VLM 是否调用仍由 `PDF_VLM_ENABLED` 控制。
+`MAX_RFP_UPLOAD_SIZE_BYTES` 限制。解析模型由 `MINERU_MODEL=vlm|pipeline` 控制，旧
+`PDF_VLM_ENABLED` 不再生效。
 
 ### 企业知识库结构化分块
 
@@ -235,6 +240,8 @@ MINERU_MODEL=vlm
 MINERU_WAIT_SECONDS=1800
 ```
 
+`MINERU_MODEL` 仅支持 `vlm` 或 `pipeline`，默认使用 `vlm`。
+
 该方案同时适用于 RFP、企业知识库及 `/dev/pdf/parse`；DOCX/Markdown 不受影响。
 转换使用 `layout.json` 的逐页 `preproc_blocks`，不采用可能错误跨页合并的
 `para_blocks` 或 `full.md`。保留页码、缩放到源页面尺寸的 bbox、原始块和表格 HTML；
@@ -243,7 +250,8 @@ MINERU_WAIT_SECONDS=1800
 DocumentIR metadata 记录本地归档位置；图片路径是 ZIP 内引用，不是可公开访问的 URL。
 这些原始 ZIP 尚未单独上传 MinIO，也不随知识库删除自动清理。
 
-远程解析失败会明确报错，原生解析后端已移除；旧 `PDF_BACKEND` 配置不再生效。
+远程解析失败会明确报错，原生解析后端已移除；旧 `PDF_BACKEND`、`PDF_VLM_ENABLED`
+及本地 OCR/Layout 配置不再生效。
 云服务输出仍可能存在错字；本适配器并不修复 OCR 错字，也不自动拼接跨页续表。
 
 容器部署需更新应用镜像并重新创建相关服务（无需重建 web 或数据库）：

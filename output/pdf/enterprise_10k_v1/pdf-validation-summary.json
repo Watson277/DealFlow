@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "dataset": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1",
+  "output": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1",
+  "pdf_count": 8,
+  "total_pages": 25,
+  "all_checks_passed": true,
+  "documents": [
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\01-product-plans-current.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\01-product-plans-current.pdf",
+      "title": "DealFlow 企业版产品与套餐说明",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 122901,
+      "sha256": "181dff39be7f749e0f04d765d5cc7b466beb432391de841c9cf82de7342d4888",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\02-identity-security-compliance.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\02-identity-security-compliance.pdf",
+      "title": "DealFlow 身份、安全与合规控制",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 124495,
+      "sha256": "8ca53abd193ddbd66a0a15445f66b859d66044ff2ff40ddd99e29f9225342139",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\03-deployment-network-data-residency.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\03-deployment-network-data-residency.pdf",
+      "title": "DealFlow 部署、网络与数据驻留政策",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 118316,
+      "sha256": "2b2aa6174f65b2ec13cc4ef8f9884271240be2290ceb33f9845e40cd764d10ae",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\04-availability-backup-support.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\04-availability-backup-support.pdf",
+      "title": "DealFlow 可用性、备份与支持服务标准",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 114842,
+      "sha256": "9713ec889c29a65d8887225013ddc6481b3b6b1f3f8f681d04869c306f2d11db",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\05-api-integrations-capacity.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\05-api-integrations-capacity.pdf",
+      "title": "DealFlow API、集成与容量限制",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 116923,
+      "sha256": "8e3ce01a17fff2b34c7607513dcaf36a4de43b8da59ca1c6399dda938d9c39c4",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\06-implementation-migration-training-limitations.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\06-implementation-migration-training-limitations.pdf",
+      "title": "DealFlow 实施、迁移、培训与能力边界",
+      "kind": "knowledge",
+      "page_count": 3,
+      "size_bytes": 124972,
+      "sha256": "e53606a9760caf5116c5f2ef1e803ab284e6b869b7ec2958c1c4505b92de48ad",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\knowledge\\07-legacy-policy-superseded.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\knowledge\\07-legacy-policy-superseded.pdf",
+      "title": "DealFlow 3.x 套餐与服务政策（已废止）",
+      "kind": "knowledge",
+      "page_count": 2,
+      "size_bytes": 96881,
+      "sha256": "f541ecc33e9e1e9de85885efd5b7a1488fa7b8f8c54b8b5903425d04cb195b42",
+      "missing_headings": [],
+      "passed": true
+    },
+    {
+      "source": "E:\\study2\\LLM Internship\\RFP-Agent\\evals\\manual\\enterprise_10k_v1\\rfp\\huadong-intelligent-manufacturing-rfp.md",
+      "pdf": "E:\\study2\\LLM Internship\\RFP-Agent\\output\\pdf\\enterprise_10k_v1\\rfp\\huadong-intelligent-manufacturing-rfp.pdf",
+      "title": "华东智造集团 RFP 智能响应平台采购需求书",
+      "kind": "rfp",
+      "page_count": 5,
+      "size_bytes": 140725,
+      "sha256": "8b0e76afc2e4eb6a30e008f09054d16278fb4fc830cf10b7fedd398983203175",
+      "missing_headings": [],
+      "passed": true
+    }
+  ]
+}

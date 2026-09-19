@@ -60,6 +60,24 @@ export interface Requirement {
   confidence: number | null;
 }
 
+export interface CapabilityEvidence {
+  id: string;
+  document_id: string;
+  document_title: string | null;
+  document_version: string | null;
+  page_number: number | null;
+  page_end: number | null;
+  section_path: string[] | null;
+  source_type: string | null;
+  source_location: Record<string, unknown> | null;
+  source_block_ids: string[] | null;
+  snippet: string;
+  matched_child_text: string | null;
+  retrieval_score: number | null;
+  rerank_score: number | null;
+  is_selected: boolean;
+}
+
 export interface Capability {
   id: string;
   requirement_key: string;
@@ -68,11 +86,7 @@ export interface Capability {
   confidence: number | null;
   reason: string;
   customization_notes: string | null;
-  evidence: Array<{
-    id: string;
-    snippet: string;
-    retrieval_score: number | null;
-  }>;
+  evidence: CapabilityEvidence[];
 }
 
 export interface Proposal {
