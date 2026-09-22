@@ -20,6 +20,7 @@ web/dealflow-ui.png
 web/test-results/
 data/processed-documents/
 data/mineru-probe/
+# Documentation is local-only. Never force-add or commit files under docs/.
 docs/
 # Tests are local-only. Never force-add or commit files under tests/.
 tests/
