@@ -1,10 +1,12 @@
 import json
 from collections import Counter
+from functools import partial
 from typing import Protocol
 
 import structlog
 from pydantic import BaseModel, ConfigDict
 
+from app.core.concurrency import gather_bounded
 from app.core.config import Settings
 from app.core.exceptions import ProposalGenerationError
 from app.llm.structured_chat import (
@@ -67,18 +69,28 @@ class OpenAIProposalGenerator:
             keys = [str(item["requirement_key"]) for item in context.capabilities]
             if not keys or len(keys) != len(set(keys)):
                 raise ProposalGenerationError("proposal requires unique, nonempty requirements")
-            responses: list[ProposalRequirementResponse] = []
             size = self.settings.proposal_batch_size
-            for start in range(0, len(keys), size):
-                responses.extend(
-                    await self._generate_batch(context, context.capabilities[start : start + size])
-                )
-                logger.info(
-                    "proposal_batch_completed",
-                    rfp_id=context.rfp.get("id"),
-                    completed_requirements=len(responses),
-                    total_requirements=len(keys),
-                )
+            batches = [
+                context.capabilities[start : start + size]
+                for start in range(0, len(keys), size)
+            ]
+            batch_results = await gather_bounded(
+                [
+                    partial(
+                        self._generate_top_level_batch,
+                        context,
+                        capabilities,
+                        batch_index=batch_index,
+                        batch_count=len(batches),
+                        total_requirements=len(keys),
+                    )
+                    for batch_index, capabilities in enumerate(batches, start=1)
+                ],
+                limit=self.settings.proposal_batch_concurrency,
+            )
+            # gather_bounded preserves factory order even when batches finish out of
+            # order, so the proposal matrix remains deterministic.
+            responses = [item for batch in batch_results for item in batch]
             # Evidence summaries and risks are bounded by ProposalBatchItem. Keep every
             # requirement's response, but do not resend raw retrieval snippets.
             overview = {
@@ -110,6 +122,27 @@ class OpenAIProposalGenerator:
             raise
         except Exception as exc:
             raise ProposalGenerationError(llm_error_summary(exc)) from exc
+
+    async def _generate_top_level_batch(
+        self,
+        context: ProposalContext,
+        capabilities: list[dict[str, object]],
+        *,
+        batch_index: int,
+        batch_count: int,
+        total_requirements: int,
+    ) -> list[ProposalRequirementResponse]:
+        responses = await self._generate_batch(context, capabilities)
+        logger.info(
+            "proposal_batch_completed",
+            rfp_id=context.rfp.get("id"),
+            batch_index=batch_index,
+            batch_count=batch_count,
+            batch_requirements=len(responses),
+            total_requirements=total_requirements,
+            concurrency=self.settings.proposal_batch_concurrency,
+        )
+        return responses
 
     async def _generate_batch(
         self,

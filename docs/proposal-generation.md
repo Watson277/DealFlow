@@ -7,8 +7,10 @@ and capability display labels are Chinese; stored capability enum values are
 unchanged. This does not translate already saved drafts or Markdown objects:
 existing proposals must be regenerated through the review/revision workflow.
 
-The generator processes capability results sequentially in batches (default 8,
-configured through `PROPOSAL_BATCH_SIZE`, range 1–10). Each batch returns only
+The generator divides capability results into batches (default 8, configured through
+`PROPOSAL_BATCH_SIZE`, range 1–10) and runs up to 3 independent top-level batches
+concurrently (configured through `PROPOSAL_BATCH_CONCURRENCY`, range 1–16). Output is
+merged in source order regardless of completion order. Each batch returns only
 requirement keys, responses, evidence summaries and risks. Source requirement text
 and capability status are restored locally. The prompt explicitly enumerates the
 exact source keys. Missing, unknown or duplicate keys trigger one corrective
@@ -33,7 +35,9 @@ Logs `proposal_batch_completed` report completed/total requirements;
 `proposal_batch_split` reports automatic subdivision and its reason. The stage remains
 `generate_proposal` until all validation, rendering and persistence succeed.
 
-Successful batches are held in memory for this generation attempt. They are not
+Coverage repair and recursive splitting stay inside the concurrency slot owned by the
+top-level batch, so corrective calls cannot bypass the configured limit. Successful
+batches are held in memory for this generation attempt. They are not
 checkpointed across process restarts or manual retries; a failed task retry
 regenerates all batches. Splitting can increase call count and overall latency.
 `PROPOSAL_MAX_OUTPUT_TOKENS` applies to each call, including the overview.

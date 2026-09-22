@@ -137,6 +137,7 @@ class Settings(BaseSettings):
     knowledge_child_chunk_size_tokens: int = Field(default=350, ge=50)
     knowledge_child_overlap_tokens: int = Field(default=40, ge=0)
     capability_max_output_tokens: int = 2_000
+    capability_concurrency: int = Field(default=4, ge=1, le=32)
     capability_lock_ttl_seconds: int = 1_800
     capability_prompt_version: str = "capability-v1"
     capability_reranker_enabled: bool = False
@@ -148,6 +149,7 @@ class Settings(BaseSettings):
     capability_reranker_fallback_enabled: bool = True
     proposal_max_output_tokens: int = 12_000
     proposal_batch_size: int = Field(default=8, ge=1, le=10)
+    proposal_batch_concurrency: int = Field(default=3, ge=1, le=16)
     proposal_evidence_max_chars: int = 1_200
     proposal_lock_ttl_seconds: int = 1_800
     proposal_prompt_version: str = "proposal-v1"

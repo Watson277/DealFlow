@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from app.agents.capability_judge import (
     CapabilityJudge,
     CapabilityRequirement,
 )
+from app.core.concurrency import gather_bounded
 from app.core.config import Settings
 from app.core.exceptions import CapabilityEvaluationError
 from app.db.session import async_session_factory
@@ -114,52 +116,13 @@ class CapabilityProcessingService:
                         "requirement count does not match embedding count"
                     )
 
-                evaluated: list[EvaluatedCapability] = []
-                for requirement, vector in zip(
+                evaluated = await self._evaluate_requirements(
+                    event,
                     capability_requirements,
                     vectors,
-                    strict=True,
-                ):
-                    async with session.begin():
-                        if await RFPRepository(session).get_active(event.rfp_id) is None:
-                            return
-                    query_text = (
-                        f"Category: {requirement.category}\n"
-                        f"Requirement: {requirement.text}"
-                    )
-                    evidence = await self.vector_store.search(
-                        vector,
-                        query_text=query_text,
-                        mode="hybrid",
-                    )
-                    evidence = evidence[
-                        : self.settings.qdrant_hybrid_fusion_top_k
-                    ]
-                    evidence = await self.reranker.rerank(
-                        query_text,
-                        evidence,
-                        limit=self.settings.qdrant_hybrid_fusion_top_k,
-                    )
-                    async with session.begin():
-                        evidence = await expand_parent_evidence(
-                            session,
-                            evidence,
-                            limit=self.settings.qdrant_search_top_k,
-                        )
-                    judgment = (
-                        await self.judge.judge(requirement, evidence)
-                        if evidence
-                        else self._no_evidence_judgment()
-                    )
-                    citation_audit = validate_capability_citations(judgment, evidence)
-                    evaluated.append(
-                        EvaluatedCapability(
-                            requirement=requirement,
-                            judgment=judgment,
-                            citation_audit=citation_audit,
-                            evidence=evidence,
-                        )
-                    )
+                )
+                if evaluated is None:
+                    return
                 completion_event = await self._save_results(session, event, evaluated)
             except Exception as exc:
                 await self._mark_failed(session, event, exc)
@@ -176,7 +139,74 @@ class CapabilityProcessingService:
                 rfp_id=rfp.id,
                 workflow_run_id=workflow_run.id,
                 capability_count=len(evaluated),
+                concurrency=self.settings.capability_concurrency,
             )
+
+    async def _evaluate_requirements(
+        self,
+        event: RequirementsExtractedEvent,
+        requirements: list[CapabilityRequirement],
+        vectors: list[list[float]],
+    ) -> list[EvaluatedCapability] | None:
+        evaluated_or_deleted = await gather_bounded(
+            [
+                partial(self._evaluate_requirement, event, requirement, vector)
+                for requirement, vector in zip(requirements, vectors, strict=True)
+            ],
+            limit=self.settings.capability_concurrency,
+        )
+        if any(item is None for item in evaluated_or_deleted):
+            return None
+        return [item for item in evaluated_or_deleted if item is not None]
+
+    async def _evaluate_requirement(
+        self,
+        event: RequirementsExtractedEvent,
+        requirement: CapabilityRequirement,
+        vector: list[float],
+    ) -> EvaluatedCapability | None:
+        # AsyncSession is stateful and cannot be shared safely by concurrent tasks.
+        # Each requirement therefore gets a short-lived, independent session for
+        # cancellation checks and Parent expansion; persistence remains one final
+        # transaction after every requirement succeeds.
+        async with async_session_factory() as task_session:
+            async with task_session.begin():
+                if await RFPRepository(task_session).get_active(event.rfp_id) is None:
+                    return None
+
+            query_text = (
+                f"Category: {requirement.category}\nRequirement: {requirement.text}"
+            )
+            evidence = await self.vector_store.search(
+                vector,
+                query_text=query_text,
+                mode="hybrid",
+            )
+            evidence = evidence[: self.settings.qdrant_hybrid_fusion_top_k]
+            evidence = await self.reranker.rerank(
+                query_text,
+                evidence,
+                limit=self.settings.qdrant_hybrid_fusion_top_k,
+            )
+            async with task_session.begin():
+                evidence = await expand_parent_evidence(
+                    task_session,
+                    evidence,
+                    limit=self.settings.qdrant_search_top_k,
+                )
+
+        judgment = (
+            await self.judge.judge(requirement, evidence)
+            if evidence
+            else self._no_evidence_judgment()
+        )
+        citation_audit = validate_capability_citations(judgment, evidence)
+        return EvaluatedCapability(
+            requirement=requirement,
+            judgment=judgment,
+            citation_audit=citation_audit,
+            evidence=evidence,
+        )
 
     async def _mark_evaluating(
         self,
