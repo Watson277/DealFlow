@@ -165,7 +165,6 @@ export default function App() {
       );
       if (version !== dataVersion.current) return;
       setStatuses(Object.fromEntries(nextStatuses));
-      setRefreshVersion((value) => value + 1);
     } catch (reason) {
       if (version === dataVersion.current)
         setError(reason instanceof Error ? reason.message : "数据加载失败");
@@ -187,11 +186,17 @@ export default function App() {
   }, [loadAll]);
 
   const selectedId = selectedRFP?.id;
+  const selectedIsProcessing = ["QUEUED", "PROCESSING"].includes(
+    (selectedId && statuses[selectedId]?.status) ?? selectedRFP?.status ?? "",
+  );
   useEffect(() => {
     if (!selectedId) return;
     let cancelled = false;
+    let inFlight = false;
     if (loadedDetailId.current !== selectedId) setDetailLoading(true);
     const load = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const [requirementPage, capabilityPage, proposalPage] =
           await Promise.all([
@@ -213,14 +218,19 @@ export default function App() {
             reason instanceof Error ? reason.message : "RFP 详情加载失败",
           );
       } finally {
+        inFlight = false;
         if (!cancelled) setDetailLoading(false);
       }
     };
     void load();
+    const timer = selectedIsProcessing ? window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 3000) : null;
     return () => {
       cancelled = true;
+      if (timer !== null) window.clearInterval(timer);
     };
-  }, [selectedId, refreshVersion]);
+  }, [selectedId, refreshVersion, selectedIsProcessing]);
 
   const openRFP = useCallback((rfp: RFP, tab: DetailTab = "requirements") => {
     loadedDetailId.current = null;
@@ -240,6 +250,7 @@ export default function App() {
       await action();
       setNotice(success);
       setPanel(null);
+      setRefreshVersion((value) => value + 1);
       await loadAll();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "操作失败");
@@ -767,6 +778,13 @@ function RFPDetail({
 }) {
   const [comment, setComment] = useState("");
   const proposal = proposals[0];
+  const activeStage = status?.current_stage ?? rfp.current_stage;
+  const isProcessing = ["QUEUED", "PROCESSING"].includes(status?.status ?? rfp.status);
+  const liveMessage = activeStage === "extract_requirements"
+    ? `已抽取 ${requirements.length} 条需求，后续分块仍在处理中`
+    : activeStage === "evaluate_capabilities"
+      ? `已完成 ${capabilities.length} / ${requirements.length} 条能力判断`
+      : `正在${status?.stage_label ?? "处理任务"}`;
   return (
     <>
       <div className="detail-actions">
@@ -793,6 +811,13 @@ function RFPDetail({
           </span>
           <span>开始时间：{formatDate(status?.stage_started_at)}</span>
         </div>
+        {isProcessing && (
+          <div className="live-progress" role="status" aria-live="polite">
+            <LoaderCircle className="spin" size={16} />
+            <span>{liveMessage}</span>
+            <small>结果约每 3 秒更新</small>
+          </div>
+        )}
         {status?.status === "FAILED" && (
           <div className="inline-error">
             <AlertCircle size={17} />
@@ -853,8 +878,10 @@ function RFPDetail({
             </div>
           ) : (
             <EmptyState
-              title="暂无需求"
-              detail="需求抽取完成后将在这里展示。"
+              title={activeStage === "extract_requirements" ? "正在抽取需求" : "暂无需求"}
+              detail={activeStage === "extract_requirements"
+                ? "每个文档分块完成后，已识别的需求会自动出现在这里。"
+                : "需求抽取完成后将在这里展示。"}
             />
           ))}
         {!busy &&
@@ -886,8 +913,10 @@ function RFPDetail({
             </div>
           ) : (
             <EmptyState
-              title="暂无判断结果"
-              detail="能力判断完成后将在这里展示。"
+              title={activeStage === "evaluate_capabilities" ? "正在评估能力" : "暂无判断结果"}
+              detail={activeStage === "evaluate_capabilities"
+                ? "每批需求判断完成后，结果与证据会自动出现在这里。"
+                : "能力判断完成后将在这里展示。"}
             />
           ))}
         {!busy &&

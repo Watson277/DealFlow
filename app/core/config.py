@@ -119,7 +119,10 @@ class Settings(BaseSettings):
     llm_top_p: float = 0.95
     llm_reasoning_effort: str = "max"
     llm_max_retries: int = Field(default=2, ge=0, le=10)
-    requirement_chunk_size_chars: int = 60_000
+    requirement_chunk_size_tokens: int = Field(default=1_000, ge=1, le=100_000)
+    requirement_chunk_overlap_tokens: int = Field(default=100, ge=0, le=10_000)
+    requirement_chunk_concurrency: int = Field(default=2, ge=1, le=16)
+    requirement_tokenizer_encoding: str = Field(default="cl100k_base", min_length=1, max_length=64)
     requirement_max_chunks: int = 20
     requirement_max_output_tokens: int = 12_000
     requirement_lock_ttl_seconds: int = 120
@@ -136,10 +139,11 @@ class Settings(BaseSettings):
     knowledge_parent_chunk_size_tokens: int = Field(default=1_200, ge=100)
     knowledge_child_chunk_size_tokens: int = Field(default=350, ge=50)
     knowledge_child_overlap_tokens: int = Field(default=40, ge=0)
-    capability_max_output_tokens: int = 2_000
+    capability_max_output_tokens: int = 8_000
+    capability_batch_size: int = Field(default=8, ge=1, le=8)
     capability_concurrency: int = Field(default=4, ge=1, le=32)
     capability_lock_ttl_seconds: int = 1_800
-    capability_prompt_version: str = "capability-v1"
+    capability_prompt_version: str = "capability-batch-v2"
     capability_reranker_enabled: bool = False
     capability_reranker_model: str = "BAAI/bge-reranker-v2-m3"
     capability_reranker_device: Literal["auto", "cuda", "cpu"] = "auto"

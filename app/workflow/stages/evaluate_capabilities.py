@@ -1,9 +1,11 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import partial
 
 import structlog
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.capability_citations import (
@@ -120,6 +122,7 @@ class CapabilityProcessingService:
                     event,
                     capability_requirements,
                     vectors,
+                    on_batch=lambda batch: self._save_partial_results(event, batch),
                 )
                 if evaluated is None:
                     return
@@ -140,6 +143,7 @@ class CapabilityProcessingService:
                 workflow_run_id=workflow_run.id,
                 capability_count=len(evaluated),
                 concurrency=self.settings.capability_concurrency,
+                batch_size=self.settings.capability_batch_size,
             )
 
     async def _evaluate_requirements(
@@ -147,36 +151,99 @@ class CapabilityProcessingService:
         event: RequirementsExtractedEvent,
         requirements: list[CapabilityRequirement],
         vectors: list[list[float]],
+        on_batch: Callable[[list[EvaluatedCapability]], Awaitable[bool]] | None = None,
     ) -> list[EvaluatedCapability] | None:
-        evaluated_or_deleted = await gather_bounded(
+        requirement_vectors = list(zip(requirements, vectors, strict=True))
+        size = self.settings.capability_batch_size
+        batches = [
+            requirement_vectors[start : start + size]
+            for start in range(0, len(requirement_vectors), size)
+        ]
+
+        async def evaluate_and_save(
+            batch: list[tuple[CapabilityRequirement, list[float]]],
+            batch_index: int,
+        ) -> list[EvaluatedCapability] | None:
+            result = await self._evaluate_batch(
+                event, batch, batch_index=batch_index, batch_count=len(batches)
+            )
+            if result is not None and on_batch is not None and not await on_batch(result):
+                return None
+            return result
+
+        evaluated_batches = await gather_bounded(
             [
-                partial(self._evaluate_requirement, event, requirement, vector)
-                for requirement, vector in zip(requirements, vectors, strict=True)
+                partial(
+                    evaluate_and_save,
+                    batch,
+                    batch_index,
+                )
+                for batch_index, batch in enumerate(batches, start=1)
             ],
             limit=self.settings.capability_concurrency,
         )
-        if any(item is None for item in evaluated_or_deleted):
+        if any(batch is None for batch in evaluated_batches):
             return None
-        return [item for item in evaluated_or_deleted if item is not None]
+        return [item for batch in evaluated_batches if batch is not None for item in batch]
 
-    async def _evaluate_requirement(
+    async def _evaluate_batch(
+        self,
+        event: RequirementsExtractedEvent,
+        requirement_vectors: list[tuple[CapabilityRequirement, list[float]]],
+        *,
+        batch_index: int,
+        batch_count: int,
+    ) -> list[EvaluatedCapability] | None:
+        prepared: list[tuple[CapabilityRequirement, list[RetrievedEvidence]]] = []
+        for requirement, vector in requirement_vectors:
+            evidence = await self._retrieve_evidence(event, requirement, vector)
+            if evidence is None:
+                return None
+            prepared.append((requirement, evidence))
+
+        judgments = await self.judge.judge_batch(prepared)
+        expected_keys = [requirement.key for requirement, _ in prepared]
+        if set(judgments) != set(expected_keys) or len(judgments) != len(expected_keys):
+            raise CapabilityEvaluationError(
+                "capability judge did not return exactly one result per requirement"
+            )
+
+        evaluated: list[EvaluatedCapability] = []
+        for requirement, evidence in prepared:
+            judgment = judgments[requirement.key]
+            evaluated.append(
+                EvaluatedCapability(
+                    requirement=requirement,
+                    judgment=judgment,
+                    citation_audit=validate_capability_citations(judgment, evidence),
+                    evidence=evidence,
+                )
+            )
+        logger.info(
+            "capability_batch_completed",
+            rfp_id=event.rfp_id,
+            batch_index=batch_index,
+            batch_count=batch_count,
+            requirement_count=len(evaluated),
+            concurrency=self.settings.capability_concurrency,
+        )
+        return evaluated
+
+    async def _retrieve_evidence(
         self,
         event: RequirementsExtractedEvent,
         requirement: CapabilityRequirement,
         vector: list[float],
-    ) -> EvaluatedCapability | None:
+    ) -> list[RetrievedEvidence] | None:
         # AsyncSession is stateful and cannot be shared safely by concurrent tasks.
-        # Each requirement therefore gets a short-lived, independent session for
-        # cancellation checks and Parent expansion; persistence remains one final
-        # transaction after every requirement succeeds.
+        # The four concurrent batch tasks therefore use short-lived independent
+        # sessions for cancellation checks and Parent expansion.
         async with async_session_factory() as task_session:
             async with task_session.begin():
                 if await RFPRepository(task_session).get_active(event.rfp_id) is None:
                     return None
 
-            query_text = (
-                f"Category: {requirement.category}\nRequirement: {requirement.text}"
-            )
+            query_text = f"Category: {requirement.category}\nRequirement: {requirement.text}"
             evidence = await self.vector_store.search(
                 vector,
                 query_text=query_text,
@@ -194,19 +261,7 @@ class CapabilityProcessingService:
                     evidence,
                     limit=self.settings.qdrant_search_top_k,
                 )
-
-        judgment = (
-            await self.judge.judge(requirement, evidence)
-            if evidence
-            else self._no_evidence_judgment()
-        )
-        citation_audit = validate_capability_citations(judgment, evidence)
-        return EvaluatedCapability(
-            requirement=requirement,
-            judgment=judgment,
-            citation_audit=citation_audit,
-            evidence=evidence,
-        )
+        return evidence
 
     async def _mark_evaluating(
         self,
@@ -225,6 +280,17 @@ class CapabilityProcessingService:
             if workflow_run.output_summary.get("capabilities_evaluated") is True:
                 logger.info("capability_event_already_processed", rfp_id=rfp.id)
                 return None
+            partial_ids = select(CapabilityResult.id).where(
+                CapabilityResult.workflow_run_id == workflow_run.id
+            )
+            await session.execute(
+                delete(CapabilityEvidence).where(
+                    CapabilityEvidence.capability_result_id.in_(partial_ids)
+                )
+            )
+            await session.execute(
+                delete(CapabilityResult).where(CapabilityResult.workflow_run_id == workflow_run.id)
+            )
             requirements = await RequirementRepository(session).list_for_rfp(rfp.id)
             if len(requirements) != event.requirement_count:
                 raise CapabilityEvaluationError(
@@ -241,6 +307,26 @@ class CapabilityProcessingService:
             workflow_run.error_message = None
         return rfp, workflow_run, list(requirements)
 
+    async def _save_partial_results(
+        self,
+        event: RequirementsExtractedEvent,
+        evaluated: list[EvaluatedCapability],
+    ) -> bool:
+        async with async_session_factory() as session, session.begin():
+            rfp = await RFPRepository(session).get_active_for_update(event.rfp_id)
+            workflow_run = await WorkflowRunRepository(session).get(event.workflow_run_id)
+            if rfp is None:
+                return False
+            if workflow_run is None or rfp.current_stage != "evaluate_capabilities":
+                raise CapabilityEvaluationError("RFP capability state changed during evaluation")
+            await self._insert_missing_results(session, workflow_run.id, evaluated)
+        logger.info(
+            "capabilities_partial_saved",
+            rfp_id=event.rfp_id,
+            batch_size=len(evaluated),
+        )
+        return True
+
     async def _save_results(
         self,
         session: AsyncSession,
@@ -255,67 +341,7 @@ class CapabilityProcessingService:
             if rfp is None or workflow_run is None:
                 raise CapabilityEvaluationError("RFP capability state disappeared")
 
-            result_repository = CapabilityResultRepository(session)
-            evidence_repository = CapabilityEvidenceRepository(session)
-            for evaluated_item in evaluated:
-                result_id = generate_uuid()
-                judgment = evaluated_item.judgment
-                citation_audit = evaluated_item.citation_audit
-                selection_order = citation_audit.selection_order()
-                result_repository.add(
-                    CapabilityResult(
-                        id=result_id,
-                        requirement_id=evaluated_item.requirement.id,
-                        workflow_run_id=workflow_run.id,
-                        status=judgment.status.value,
-                        confidence=Decimal(str(round(judgment.confidence, 4))),
-                        reason=judgment.reason.strip(),
-                        customization_notes=(
-                            judgment.customization_notes.strip()
-                            if judgment.customization_notes
-                            else None
-                        ),
-                        model_name=self.settings.llm_model,
-                        prompt_version=self.settings.capability_prompt_version,
-                        raw_output=judgment.model_dump(mode="json"),
-                        citation_audit=citation_audit.as_payload(),
-                    )
-                )
-                for rank, evidence in enumerate(evaluated_item.evidence, start=1):
-                    evidence_repository.add(
-                        CapabilityEvidence(
-                            id=generate_uuid(),
-                            capability_result_id=result_id,
-                            document_id=evidence.document_id,
-                            qdrant_point_id=evidence.point_id,
-                            document_title=evidence.title,
-                            document_version=evidence.version,
-                            category=evidence.category,
-                            parent_id=evidence.parent_id,
-                            child_chunk_id=evidence.chunk_id,
-                            page_number=evidence.page_number,
-                            page_end=evidence.page_end,
-                            snippet=evidence.text,
-                            matched_child_text=(
-                                evidence.matched_child_text or evidence.text
-                            ),
-                            section_path=list(evidence.section_path),
-                            block_types=list(evidence.block_types),
-                            source_block_ids=list(evidence.source_block_ids),
-                            source_type=evidence.source_type,
-                            source_location=evidence.location,
-                            retrieval_mode=evidence.retrieval_mode,
-                            retrieval_score=Decimal(str(round(evidence.score, 6))),
-                            rerank_score=(
-                                Decimal(str(round(evidence.rerank_score, 6)))
-                                if evidence.rerank_score is not None
-                                else None
-                            ),
-                            rank_position=rank,
-                            is_selected=evidence.point_id in selection_order,
-                            selection_order=selection_order.get(evidence.point_id),
-                        )
-                    )
+            await self._insert_missing_results(session, workflow_run.id, evaluated)
 
             rfp.status = RFPStatus.PROCESSING.value
             rfp.current_stage = "capabilities_evaluated"
@@ -346,6 +372,85 @@ class CapabilityProcessingService:
             OutboxEventRepository(session).add(completion_event)
             await session.flush()
         return completion_event
+
+    async def _insert_missing_results(
+        self,
+        session: AsyncSession,
+        workflow_run_id: str,
+        evaluated: list[EvaluatedCapability],
+    ) -> None:
+        existing = set(
+            (
+                await session.scalars(
+                    select(CapabilityResult.requirement_id).where(
+                        CapabilityResult.workflow_run_id == workflow_run_id
+                    )
+                )
+            ).all()
+        )
+        result_repository = CapabilityResultRepository(session)
+        evidence_repository = CapabilityEvidenceRepository(session)
+        for evaluated_item in evaluated:
+            if evaluated_item.requirement.id in existing:
+                continue
+            existing.add(evaluated_item.requirement.id)
+            result_id = generate_uuid()
+            judgment = evaluated_item.judgment
+            citation_audit = evaluated_item.citation_audit
+            selection_order = citation_audit.selection_order()
+            result_repository.add(
+                CapabilityResult(
+                    id=result_id,
+                    requirement_id=evaluated_item.requirement.id,
+                    workflow_run_id=workflow_run_id,
+                    status=judgment.status.value,
+                    confidence=Decimal(str(round(judgment.confidence, 4))),
+                    reason=judgment.reason.strip(),
+                    customization_notes=(
+                        judgment.customization_notes.strip()
+                        if judgment.customization_notes
+                        else None
+                    ),
+                    model_name=self.settings.llm_model,
+                    prompt_version=self.settings.capability_prompt_version,
+                    raw_output=judgment.model_dump(mode="json"),
+                    citation_audit=citation_audit.as_payload(),
+                )
+            )
+            for rank, evidence in enumerate(evaluated_item.evidence, start=1):
+                evidence_repository.add(
+                    CapabilityEvidence(
+                        id=generate_uuid(),
+                        capability_result_id=result_id,
+                        document_id=evidence.document_id,
+                        qdrant_point_id=evidence.point_id,
+                        document_title=evidence.title,
+                        document_version=evidence.version,
+                        category=evidence.category,
+                        parent_id=evidence.parent_id,
+                        child_chunk_id=evidence.chunk_id,
+                        page_number=evidence.page_number,
+                        page_end=evidence.page_end,
+                        snippet=evidence.text,
+                        matched_child_text=(evidence.matched_child_text or evidence.text),
+                        section_path=list(evidence.section_path),
+                        block_types=list(evidence.block_types),
+                        source_block_ids=list(evidence.source_block_ids),
+                        source_type=evidence.source_type,
+                        source_location=evidence.location,
+                        retrieval_mode=evidence.retrieval_mode,
+                        retrieval_score=Decimal(str(round(evidence.score, 6))),
+                        rerank_score=(
+                            Decimal(str(round(evidence.rerank_score, 6)))
+                            if evidence.rerank_score is not None
+                            else None
+                        ),
+                        rank_position=rank,
+                        is_selected=evidence.point_id in selection_order,
+                        selection_order=selection_order.get(evidence.point_id),
+                    )
+                )
+        await session.flush()
 
     async def _mark_failed(
         self,

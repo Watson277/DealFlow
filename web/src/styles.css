@@ -742,6 +742,24 @@ td small {
   color: #8791a2;
   font-size: 11px;
 }
+.live-progress {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #23795f;
+  background: #edf7f3;
+  font-size: 12px;
+}
+.live-progress span {
+  flex: 1;
+}
+.live-progress small {
+  color: #668779;
+  font-size: 11px;
+}
 .inline-error {
   margin-top: 16px;
   padding: 11px;

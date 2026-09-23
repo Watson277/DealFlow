@@ -1,9 +1,12 @@
 import asyncio
 import hashlib
+import re
+from contextlib import aclosing
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import structlog
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.requirement_extractor import RequirementExtractor
@@ -73,11 +76,19 @@ class RequirementProcessingService:
                                 document.bucket, event.parsed_text_object_key
                             )
                         ).decode("utf-8")
-                        extracted = await self.extractor.extract(
-                            parsed_text,
-                            rfp_id=rfp.id,
-                            title=rfp.title,
-                        )
+                        extracted: list[ExtractedRequirement] = []
+                        extract_chunks = getattr(self.extractor, "extract_chunks", None)
+                        if callable(extract_chunks):
+                            async with aclosing(
+                                extract_chunks(parsed_text, rfp_id=rfp.id, title=rfp.title)
+                            ) as batches:
+                                async for batch in batches:
+                                    extracted.extend(batch)
+                                    await self._save_partial_requirements(session, event, extracted)
+                        else:
+                            extracted = await self.extractor.extract(
+                                parsed_text, rfp_id=rfp.id, title=rfp.title
+                            )
                 except TimeoutError as exc:
                     raise RequirementExtractionError(
                         "requirement extraction exceeded "
@@ -133,6 +144,9 @@ class RequirementProcessingService:
                 logger.info("requirement_event_already_processed", rfp_id=rfp.id)
                 return None
 
+            # A failed extraction can leave visible partial rows; retry starts fresh.
+            await session.execute(delete(Requirement).where(Requirement.rfp_id == rfp.id))
+
             rfp.status = RFPStatus.PROCESSING.value
             rfp.current_stage = "extract_requirements"
             rfp.stage_started_at = now
@@ -142,6 +156,24 @@ class RequirementProcessingService:
             workflow_run.error_code = None
             workflow_run.error_message = None
         return rfp, document, workflow_run
+
+    async def _save_partial_requirements(
+        self,
+        session: AsyncSession,
+        event: RFPCompletedEvent,
+        extracted: list[ExtractedRequirement],
+    ) -> None:
+        requirements = self._deduplicate(extracted)
+        async with session.begin():
+            rfp = await RFPRepository(session).get_active_for_update(event.rfp_id)
+            if rfp is None:
+                raise RequirementExtractionError("RFP extraction state disappeared")
+            await self._write_requirements(session, event, requirements)
+        logger.info(
+            "requirements_partial_saved",
+            rfp_id=event.rfp_id,
+            requirement_count=len(requirements),
+        )
 
     async def _save_requirements(
         self,
@@ -159,28 +191,7 @@ class RequirementProcessingService:
             if rfp is None or document is None or workflow_run is None:
                 raise RequirementExtractionError("RFP extraction state disappeared")
 
-            repository = RequirementRepository(session)
-            for index, item in enumerate(requirements, start=1):
-                normalized_text = self._normalize_text(item.normalized_text)
-                fingerprint = hashlib.sha256(normalized_text.casefold().encode()).hexdigest()
-                repository.add(
-                    Requirement(
-                        id=generate_uuid(),
-                        rfp_id=rfp.id,
-                        source_document_id=document.id,
-                        requirement_key=f"REQ-{index:04d}",
-                        category=item.category.strip().lower(),
-                        requirement_text=item.requirement_text.strip(),
-                        normalized_text=normalized_text,
-                        mandatory=item.mandatory,
-                        source_page_start=item.source_page_start,
-                        source_page_end=item.source_page_end,
-                        source_quote=item.source_quote.strip() if item.source_quote else None,
-                        confidence=Decimal(str(round(item.confidence, 4))),
-                        fingerprint=fingerprint,
-                        raw_output=item.model_dump(mode="json"),
-                    )
-                )
+            await self._write_requirements(session, event, requirements)
 
             rfp.status = RFPStatus.PROCESSING.value
             rfp.current_stage = "requirements_extracted"
@@ -212,6 +223,38 @@ class RequirementProcessingService:
             OutboxEventRepository(session).add(completion_event)
             await session.flush()
         return completion_event
+
+    async def _write_requirements(
+        self,
+        session: AsyncSession,
+        event: RFPCompletedEvent,
+        requirements: list[ExtractedRequirement],
+    ) -> None:
+        repository = RequirementRepository(session)
+        existing = await repository.list_for_rfp(event.rfp_id)
+        for index, item in enumerate(requirements, start=1):
+            normalized_text = self._normalize_text(item.normalized_text)
+            values = {
+                "rfp_id": event.rfp_id,
+                "source_document_id": event.document_id,
+                "requirement_key": f"REQ-{index:04d}",
+                "category": item.category.strip().lower(),
+                "requirement_text": item.requirement_text.strip(),
+                "normalized_text": normalized_text,
+                "mandatory": item.mandatory,
+                "source_page_start": item.source_page_start,
+                "source_page_end": item.source_page_end,
+                "source_quote": item.source_quote.strip() if item.source_quote else None,
+                "confidence": Decimal(str(round(item.confidence, 4))),
+                "fingerprint": hashlib.sha256(normalized_text.casefold().encode()).hexdigest(),
+                "raw_output": item.model_dump(mode="json"),
+            }
+            if index <= len(existing):
+                for field, value in values.items():
+                    setattr(existing[index - 1], field, value)
+            else:
+                repository.add(Requirement(id=generate_uuid(), **values))
+        await session.flush()
 
     async def _mark_failed(
         self,
@@ -268,7 +311,12 @@ class RequirementProcessingService:
     ) -> list[ExtractedRequirement]:
         unique: dict[str, ExtractedRequirement] = {}
         for item in extracted:
-            key = cls._normalize_text(item.normalized_text).casefold()
+            identifier = re.match(r"^([A-Za-z][A-Za-z0-9]*-\d{2,})\b", item.requirement_text)
+            key = (
+                f"item:{identifier.group(1).casefold()}"
+                if identifier is not None
+                else f"text:{cls._normalize_text(item.normalized_text).casefold()}"
+            )
             previous = unique.get(key)
             if previous is None or item.confidence > previous.confidence:
                 unique[key] = item

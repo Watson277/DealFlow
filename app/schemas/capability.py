@@ -15,6 +15,16 @@ class CapabilityJudgment(BaseModel):
     selected_evidence_point_ids: list[str]
 
 
+class CapabilityBatchJudgmentItem(CapabilityJudgment):
+    requirement_key: str = Field(min_length=1, max_length=32)
+
+
+class CapabilityBatchJudgment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    judgments: list[CapabilityBatchJudgmentItem] = Field(min_length=1, max_length=8)
+
+
 class CapabilityEvidenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
