@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Computed, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,8 +25,8 @@ class RFP(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "customer_id",
-            "reference_number",
-            name="uq_rfps_customer_reference_number",
+            "active_reference_number",
+            name="uq_rfps_customer_active_reference_number",
         ),
         Index("ix_rfps_customer_status", "customer_id", "status"),
         Index("ix_rfps_status_created_at", "status", "created_at"),
@@ -45,6 +45,14 @@ class RFP(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     reference_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    active_reference_number: Mapped[str | None] = mapped_column(
+        String(100),
+        Computed(
+            "CASE WHEN deleted_at IS NULL THEN reference_number ELSE NULL END",
+            persisted=True,
+        ),
+        nullable=True,
+    )
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

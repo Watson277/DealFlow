@@ -39,6 +39,16 @@ from app.repositories import (
 
 logger = structlog.get_logger(__name__)
 
+_RFP_REFERENCE_CONSTRAINTS = (
+    "uq_rfps_customer_active_reference_number",
+    "uq_rfps_customer_reference_number",
+)
+
+
+def _is_reference_number_conflict(exc: IntegrityError) -> bool:
+    message = str(exc.orig)
+    return any(name in message for name in _RFP_REFERENCE_CONSTRAINTS)
+
 
 @dataclass(frozen=True, slots=True)
 class CreateRFPCommand:
@@ -177,9 +187,11 @@ class RFPService:
                 await self.session.flush()
         except IntegrityError as exc:
             await self._remove_uploaded_object(stored_object.bucket, stored_object.object_key)
-            raise RFPConflictError(
-                "an RFP with the same customer reference already exists"
-            ) from exc
+            if _is_reference_number_conflict(exc):
+                raise RFPConflictError(
+                    "an RFP with the same customer reference already exists"
+                ) from exc
+            raise
         except Exception:
             await self._remove_uploaded_object(stored_object.bucket, stored_object.object_key)
             raise
