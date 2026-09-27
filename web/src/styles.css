@@ -1038,11 +1038,13 @@ td small {
 .customer-grid {
   padding: 22px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 13px;
 }
 .document-card,
 .customer-card {
+  min-width: 0;
+  max-width: 100%;
   min-height: 100px;
   padding: 16px;
   border: 1px solid #e7eaee;
@@ -1284,7 +1286,7 @@ td small {
   }
   .document-grid,
   .customer-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 900px) {
@@ -1315,7 +1317,7 @@ td small {
   }
   .document-grid,
   .customer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 600px) {
@@ -1400,6 +1402,6 @@ td small {
   }
   .document-grid,
   .customer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
