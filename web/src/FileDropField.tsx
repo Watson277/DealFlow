@@ -17,6 +17,7 @@ type FileDropFieldProps = {
   accept: string;
   allowedExtensions: string[];
   maxBytes?: number;
+  onFileSelected?: (file: File) => void;
 };
 
 function formatFileSize(bytes: number) {
@@ -32,6 +33,7 @@ export function FileDropField({
   accept,
   allowedExtensions,
   maxBytes = DEFAULT_MAX_BYTES,
+  onFileSelected,
 }: FileDropFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -67,6 +69,7 @@ export function FileDropField({
     if (files && inputRef.current) inputRef.current.files = files;
     setSelected(file);
     setError("");
+    onFileSelected?.(file);
   };
 
   const onChange = (event: ChangeEvent<HTMLInputElement>) => {

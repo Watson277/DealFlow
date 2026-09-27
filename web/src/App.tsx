@@ -646,6 +646,7 @@ export default function App() {
 
       {panel && (
         <SidePanel
+          key={`${panel}-${editingKnowledge?.id ?? "new"}`}
           panel={panel}
           customers={customers}
           knowledgeDocument={editingKnowledge}
@@ -1067,6 +1068,19 @@ function SidePanel({
   onClose: () => void;
   onSubmit: (action: () => Promise<unknown>, success: string) => Promise<void>;
 }) {
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const automaticTitleRef = useRef("");
+  const fillTitleFromFile = (file: File) => {
+    const input = titleInputRef.current;
+    if (!input) return;
+    // Follow file replacements until the user supplies their own title.
+    if (!input.value.trim() || input.value === automaticTitleRef.current) {
+      const filename = file.name.replace(/\.(pdf|docx|md|markdown)$/i, "").trim();
+      const title = (filename || file.name).slice(0, 255);
+      input.value = title;
+      automaticTitleRef.current = title;
+    }
+  };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1153,7 +1167,13 @@ function SidePanel({
               </label>
               <label>
                 RFP 标题
-                <input name="title" required maxLength={255} />
+                <input
+                  ref={titleInputRef}
+                  name="title"
+                  required
+                  maxLength={255}
+                  placeholder="选择文件后自动填写，可修改"
+                />
               </label>
               <label>
                 项目编号
@@ -1179,6 +1199,7 @@ function SidePanel({
                 help="支持 PDF 或 DOCX，最大 50 MB"
                 accept=".pdf,.docx"
                 allowedExtensions={[".pdf", ".docx"]}
+                onFileSelected={fillTitleFromFile}
               />
             </>
           )}
@@ -1187,8 +1208,11 @@ function SidePanel({
               <label>
                 文档标题
                 <input
+                  ref={titleInputRef}
                   name="title"
                   required
+                  maxLength={255}
+                  placeholder="选择文件后自动填写，可修改"
                   defaultValue={String(knowledgeDocument?.extra_data.title ?? "")}
                 />
               </label>
@@ -1213,6 +1237,7 @@ function SidePanel({
                 help="支持 PDF、DOCX 或 Markdown，将被解析并写入向量库"
                 accept=".pdf,.docx,.md,.markdown,text/markdown"
                 allowedExtensions={[".pdf", ".docx", ".md", ".markdown"]}
+                onFileSelected={fillTitleFromFile}
               />
             </>
           )}
