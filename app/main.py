@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.core.request_timing import RequestTimingMiddleware
 from app.db.session import close_database
 from app.infrastructure.messaging.kafka import get_kafka_service
 
@@ -37,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = app_settings
+    application.add_middleware(RequestTimingMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,

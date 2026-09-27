@@ -30,6 +30,11 @@ DealFlow 是一个基于 FastAPI、Kafka 和多个异步 Agent Worker 的 RFP �
    从原先 1536 维向量配置升级时，默认 Qdrant collection 会切换到
    `dealflow_knowledge_glm`。旧 collection 不会被删除，但企业知识文档需要重新上传索引。
 
+   Capability Worker 固定启用 `HF_HUB_OFFLINE=1`，重排模型只读取
+   `dealflow-huggingface-cache` 持久卷中的已有缓存，不连接 Hugging Face 检查更新或下载。
+   同时关闭 RRF 降级（`CAPABILITY_RERANKER_FALLBACK_ENABLED=false`），缓存缺失、损坏或
+   重排失败会明确报错并将任务标记为失败。首次部署或更换模型前需要预先准备完整模型缓存。
+
 3. 构建并启动完整系统：
 
    ```powershell
@@ -55,6 +60,13 @@ Swagger `/docs` 和 ReDoc `/redoc` 已关闭，业务界面不展示自动生成
 先在「客户管理」创建客户，在「企业知识库」上传公司资料，再通过「新建 RFP」上传客户文件。
 点击 RFP 查看需求、能力判断及证据、Markdown 方案。方案生成后可以直接通过审核，
 也可以填写意见要求修改；Markdown 可直接下载，不生成 DOCX/PDF。
+
+工作台列表与任务详情展示「异步工作流总耗时」：从服务端开始接收 RFP 上传请求，
+到首次生成方案并进入人工审核为止，包含上传、排队、各 Worker 处理及失败重试等待。
+处理中详情页每秒计时，到达审核后固定显示；审核通过或要求修改均不会覆盖首次耗时。
+历史任务没有上传开始记录，按创建时间及首版方案时间回填，并标注「估算」。
+`GET /rfps/{rfp_id}/status` 返回 `workflow_started_at`、`review_ready_at`、
+`workflow_elapsed_seconds`、`workflow_timing_running` 和 `workflow_timing_estimated`。
 
 「方案与审核」默认以 Markdown 格式预览，支持标题、列表、引用、表格、任务列表和代码块，
 原始 `.md` 下载保持不变。宽表格和代码块可横向滚动。预览不执行原始 HTML 或危险链接，

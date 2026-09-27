@@ -89,7 +89,38 @@ function formatDate(value: string | null | undefined) {
 function formatDuration(seconds: number) {
   if (seconds < 60) return `${seconds} 秒`;
   const minutes = Math.floor(seconds / 60);
+  if (minutes >= 60) return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分 ${seconds % 60} 秒`;
   return `${minutes} 分 ${seconds % 60} 秒`;
+}
+
+function WorkflowDuration({ status }: { status: RFPStatus }) {
+  const [elapsed, setElapsed] = useState(status.workflow_elapsed_seconds);
+  useEffect(() => {
+    setElapsed(status.workflow_elapsed_seconds);
+    if (!status.workflow_timing_running) return;
+    // Use the server's elapsed duration, not the browser wall clock (which may differ).
+    const started = performance.now();
+    const timer = window.setInterval(() => {
+      setElapsed(status.workflow_elapsed_seconds + Math.floor((performance.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [status]);
+  return (
+    <div className="workflow-duration">
+      <div>
+        <span>异步工作流总耗时{status.workflow_timing_estimated ? "（估算）" : ""}</span>
+        <strong>{formatDuration(status.workflow_timing_running ? elapsed : status.workflow_elapsed_seconds)}</strong>
+        <small>{status.review_ready_at ? "已到达人工审核 · 耗时已固定"
+          : status.workflow_timing_running ? "计时中 · 上传至首次进入人工审核"
+            : "处理已中断 · 重试后继续计时"}</small>
+      </div>
+      <div className="workflow-timestamps">
+        <span>{status.workflow_timing_estimated ? "任务创建" : "上传开始"}：{formatDate(status.workflow_started_at)}</span>
+        <span>进入审核：{formatDate(status.review_ready_at)}</span>
+        <small>包含上传、排队与重试等待，不含人工审核耗时</small>
+      </div>
+    </div>
+  );
 }
 
 function StatusBadge({ value }: { value: string }) {
@@ -692,6 +723,7 @@ function RFPTable({
             <th>状态</th>
             <th>当前阶段</th>
             <th>进度</th>
+            <th>工作流耗时</th>
             <th>更新时间</th>
             <th />
           </tr>
@@ -727,6 +759,9 @@ function RFPTable({
                     </span>
                     <em>{state?.progress_percent ?? 0}%</em>
                   </div>
+                </td>
+                <td>{state ? formatDuration(state.workflow_elapsed_seconds) : "—"}
+                  <small>{state?.workflow_timing_estimated ? "估算 · " : ""}{state?.review_ready_at ? "已到达审核" : state?.workflow_timing_running ? "计时中" : ""}</small>
                 </td>
                 <td>{formatDate(item.updated_at)}</td>
                 <td>
@@ -795,6 +830,7 @@ function RFPDetail({
         </button>
       </div>
       <section className="progress-card">
+        {status && <WorkflowDuration key={rfp.id} status={status} />}
         <div className="progress-top">
           <div>
             <StatusBadge value={status?.status ?? rfp.status} />

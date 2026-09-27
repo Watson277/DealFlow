@@ -73,6 +73,8 @@ class RFP(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     source_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     due_at: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6), nullable=True)
+    workflow_started_at: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6), nullable=True)
+    review_ready_at: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(
         DATETIME(fsp=6),
         nullable=True,

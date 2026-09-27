@@ -58,6 +58,7 @@ class CreateRFPCommand:
     priority: str
     source_language: str | None
     due_at: datetime | None
+    workflow_started_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +102,7 @@ class RFPService:
         self.outbox_publisher = outbox_publisher
 
     async def create(self, command: CreateRFPCommand, upload: UploadFile) -> CreateRFPResult:
+        workflow_started_at = command.workflow_started_at or utc_now()
         async with self.session.begin():
             customer = await CustomerRepository(self.session).get_active(command.customer_id)
             if customer is None:
@@ -127,6 +129,7 @@ class RFPService:
             status=RFPStatus.QUEUED.value,
             current_stage="queued",
             stage_started_at=queued_at,
+            workflow_started_at=workflow_started_at,
             priority=command.priority,
             source_language=command.source_language,
             due_at=command.due_at,

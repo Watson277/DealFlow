@@ -84,6 +84,11 @@ class RFPStatusResponse(BaseModel):
     progress_percent: int
     stage_started_at: datetime | None
     elapsed_seconds: int
+    workflow_started_at: datetime
+    review_ready_at: datetime | None
+    workflow_elapsed_seconds: int
+    workflow_timing_running: bool
+    workflow_timing_estimated: bool
     attempt: int
     is_terminal: bool
     error_message: str | None

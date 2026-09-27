@@ -347,11 +347,17 @@ services:
         fi;
         exec python -m app.workers.requirement_pool
     depends_on: *app-dependencies
-    restart: on-failure
+    restart: unless-stopped
 
   capability-worker:
     <<: *app-service
     container_name: dealflow-capability-worker
+    environment:
+      <<: *app-environment
+      # Cached models only: do not check or download from the Hugging Face Hub.
+      HF_HUB_OFFLINE: "1"
+      # Missing/broken model cache must fail the task, not silently skip reranking.
+      CAPABILITY_RERANKER_FALLBACK_ENABLED: "false"
     deploy:
       resources:
         reservations:

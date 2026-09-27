@@ -9,6 +9,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -143,6 +144,14 @@ async def get_rfp_status(
         max(0, int((elapsed_end - stage_started_at).total_seconds())) if stage_started_at else 0
     )
     latest_workflow = max(rfp.workflow_runs, key=lambda item: item.created_at, default=None)
+    workflow_started_at = rfp.workflow_started_at or rfp.created_at
+    workflow_timing_running = rfp.review_ready_at is None and rfp.status in {
+        RFPStatus.QUEUED.value,
+        RFPStatus.PROCESSING.value,
+    }
+    workflow_elapsed_end = rfp.review_ready_at or (
+        utc_now() if workflow_timing_running else rfp.updated_at
+    )
     return RFPStatusResponse(
         rfp_id=rfp.id,
         status=rfp.status,
@@ -151,6 +160,13 @@ async def get_rfp_status(
         progress_percent=progress_percent,
         stage_started_at=stage_started_at,
         elapsed_seconds=elapsed_seconds,
+        workflow_started_at=workflow_started_at,
+        review_ready_at=rfp.review_ready_at,
+        workflow_elapsed_seconds=max(
+            0, int((workflow_elapsed_end - workflow_started_at).total_seconds())
+        ),
+        workflow_timing_running=workflow_timing_running,
+        workflow_timing_estimated=rfp.workflow_started_at is None,
         attempt=latest_workflow.attempt if latest_workflow else 0,
         is_terminal=rfp.status
         in {
@@ -265,6 +281,7 @@ async def list_rfp_proposals(
 
 @router.post("", response_model=RFPCreateResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_rfp(
+    request: Request,
     file: Annotated[UploadFile, File(description="RFP document in PDF or DOCX format")],
     customer_id: Annotated[UUID, Form()],
     title: Annotated[str, Form(min_length=1, max_length=255)],
@@ -281,6 +298,7 @@ async def create_rfp(
         priority=priority.value,
         source_language=source_language,
         due_at=due_at,
+        workflow_started_at=request.state.request_started_at,
     )
     try:
         result = await service.create(command, file)

@@ -273,6 +273,9 @@ class ProposalProcessingService:
             rfp.status = RFPStatus.REVIEW_PENDING.value
             rfp.current_stage = "human_review"
             rfp.stage_started_at = now
+            # Freeze first-upload-to-first-review duration across revisions and retries.
+            if rfp.review_ready_at is None:
+                rfp.review_ready_at = now
             workflow_run.status = WorkflowStatus.WAITING_REVIEW.value
             workflow_run.current_node = "human_review"
             workflow_run.output_summary = {

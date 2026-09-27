@@ -1,0 +1,14 @@
+{
+  "source": "evals/manual/pharma_cold_chain_10k_v1/rfp/zhonglan-biologics-cold-chain-rfp.md",
+  "pdf": "output/pdf/pharma_cold_chain_10k_v1/rfp/zhonglan-biologics-cold-chain-rfp.pdf",
+  "title": "中澜生物制品全国冷链仓配一体化项目采购需求书",
+  "page_count": 6,
+  "requirement_count": 42,
+  "requirement_ids_unique": true,
+  "empty_pages": [],
+  "missing_headings": [],
+  "a4": true,
+  "size_bytes": 400670,
+  "sha256": "6e082f921bdc45e01b10cfb9039078bdca3857f39b4e5669c9ffed2c66209e01",
+  "passed": true
+}

@@ -31,6 +31,11 @@ export interface RFPStatus {
   progress_percent: number;
   stage_started_at: string | null;
   elapsed_seconds: number;
+  workflow_started_at: string;
+  review_ready_at: string | null;
+  workflow_elapsed_seconds: number;
+  workflow_timing_running: boolean;
+  workflow_timing_estimated: boolean;
   attempt: number;
   is_terminal: boolean;
   error_message: string | null;
